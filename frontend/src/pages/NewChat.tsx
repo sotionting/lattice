@@ -43,6 +43,7 @@ const NewChat: React.FC = () => {
     updateChatTabLoading,
     updateChatTabStreaming,
     updateChatTabInput,
+    updateChatTabModelId,
   } = useTabStore();
 
   // 用户认证状态
@@ -82,9 +83,15 @@ const NewChat: React.FC = () => {
         // 只保留 LLM 模型（过滤掉图像/视频模型）
         const llmModels = models.filter((m) => m.model_type === 'llm');
         setAvailableModels(llmModels);
+
+        // 若当前 tab 未选择模型，自动设置为默认模型
+        if (activeTab && !activeTab.selectedModelId && llmModels.length > 0) {
+          const defaultModel = llmModels.find((m) => m.is_default) || llmModels[0];
+          updateChatTabModelId(activeTab.id, defaultModel.id);
+        }
       })
       .catch(() => {}); // 失败时静默处理
-  }, []);
+  }, [activeTab?.id, updateChatTabModelId, activeTab]);
 
   // ── 副作用：自动滚动到消息末尾 ────────────────────────────────────────
 
@@ -233,21 +240,18 @@ const NewChat: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {availableModels.length > 0 && (
             <Select
-              value={activeTab.selectedModelId || undefined}
+              value={activeTab.selectedModelId}
               onChange={(val) => {
-                // 使用现有的 selectedModelId，若无则使用第一个
-                const selected = val || availableModels[0]?.id;
-                // TODO: 添加 updateChatTabModelId 方法到 tabStore
-                // updateChatTabModelId(activeTab.id, selected);
+                updateChatTabModelId(activeTab.id, val);
               }}
               disabled={activeTab.loading || activeTab.streaming}
               size="small"
               style={{ width: 160 }}
               placeholder="选择模型"
-              options={availableModels.length > 0 ? availableModels.map((m) => ({
+              options={availableModels.map((m) => ({
                 value: m.id,
                 label: m.is_default ? `★ ${m.name}` : m.name,
-              })) : []}
+              }))}
             />
           )}
           <Button

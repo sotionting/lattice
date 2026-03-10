@@ -16,6 +16,7 @@ export interface ChatTab {
   loading: boolean; // 等待第一个 token 时为 true
   streaming: boolean; // 文字流式输出中为 true
   input: string; // 输入框当前文本
+  selectedModelId?: string; // 选中的模型 ID（前端获取可用模型后初始化）
 }
 
 // 生成标签接口 - 存储每个生成任务 tab 的信息和状态
@@ -83,6 +84,9 @@ interface TabState {
 
   // 更新对话 tab 的输入框文本
   updateChatTabInput: (tabId: string, input: string) => void;
+
+  // 更新对话 tab 的选中模型 ID
+  updateChatTabModelId: (tabId: string, modelId: string) => void;
 
   // ── Generate Tab 操作方法 ──────────────────────────────────────────────
 
@@ -246,6 +250,12 @@ export const useTabStore = create<TabState>((set, get) => {
     updateChatTabInput: (tabId: string, input: string) => {
       set(state => ({
         chatTabs: state.chatTabs.map(t => (t.id === tabId ? { ...t, input } : t)),
+      }));
+    },
+
+    updateChatTabModelId: (tabId: string, modelId: string) => {
+      set(state => ({
+        chatTabs: state.chatTabs.map(t => (t.id === tabId ? { ...t, selectedModelId: modelId } : t)),
       }));
     },
 
