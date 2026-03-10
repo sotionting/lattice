@@ -1,0 +1,127 @@
+/* 思考链气泡 - 与 AI 消息气泡类似 */
+.thinking-chain-bubble {
+  display: flex; /* 水平排列头像和内容 */
+  align-items: flex-start; /* 顶部对齐 */
+  gap: 12px; /* 头像和内容之间的间隙 */
+  margin: 8px 0; /* 气泡上下外边距 */
+  animation: fadeIn 0.3s ease-in-out; /* 淡入动画 */
+}
+
+/* 淡入动画 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* AI 头像 */
+.thinking-chain-avatar {
+  width: 32px; /* 头像大小 */
+  height: 32px;
+  border-radius: 50%; /* 圆形 */
+  display: flex; /* 居中内容 */
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0; /* 防止被压缩 */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); /* 轻微阴影 */
+}
+
+/* 思考链内容容器 */
+.thinking-chain-content {
+  flex: 1; /* 占用剩余空间 */
+  background: white; /* 白色背景 */
+  border: 1px solid rgba(0, 0, 0, 0.06); /* 细边框 */
+  border-radius: 12px; /* 圆角 */
+  padding: 12px 14px; /* 内边距 */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); /* 轻微阴影 */
+}
+
+/* 单个思考步骤 */
+.thinking-step {
+  display: flex; /* 水平排列 */
+  align-items: center; /* 垂直居中 */
+  gap: 8px; /* 图标和文本之间的间隙 */
+  padding: 6px 0; /* 步骤间的间隙 */
+  font-size: 13px; /* 字号 */
+  line-height: 1.5; /* 行高 */
+}
+
+/* 已完成的步骤 - 灰色 */
+.thinking-step.completed {
+  color: #94a3b8; /* 灰色文字 */
+}
+
+.thinking-step.completed .step-icon {
+  display: flex; /* 居中图标 */
+  align-items: center;
+  justify-content: center;
+  font-size: 14px; /* 图标大小 */
+}
+
+/* 当前步骤（进行中） - 彩色 */
+.thinking-step.current {
+  color: #1f2937; /* 深灰文字 */
+  font-weight: 500; /* 稍微加粗 */
+}
+
+.thinking-step.current .step-icon {
+  display: flex; /* 居中图标 */
+  align-items: center;
+  justify-content: center;
+  font-size: 16px; /* 图标大小 */
+}
+
+/* 旋转动画 - 加载图标 */
+.step-icon.spinning {
+  animation: spin 2s linear infinite; /* 无限旋转 */
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 步骤文本 */
+.step-text {
+  flex: 1; /* 占用剩余空间 */
+}
+
+/* 当前步骤的文本 - 脉冲动画（闪烁） */
+.step-text.pulsing {
+  animation: pulse 1.5s ease-in-out infinite; /* 脉冲动画 */
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.8; /* 半透明 */
+  }
+  50% {
+    opacity: 1; /* 全透明 */
+  }
+}
+
+/* 进度条 */
+.thinking-progress-bar {
+  width: 100%; /* 满宽 */
+  height: 2px; /* 细线 */
+  background: rgba(0, 0, 0, 0.08); /* 浅灰背景 */
+  border-radius: 1px; /* 微圆角 */
+  margin-top: 6px; /* 上边距 */
+  overflow: hidden; /* 进度条圆角 */
+}
+
+/* 进度条填充 */
+.thinking-progress-fill {
+  height: 100%; /* 满高 */
+  border-radius: 1px; /* 圆角 */
+  transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1); /* 平滑宽度过渡 */
+}

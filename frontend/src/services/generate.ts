@@ -70,3 +70,22 @@ export function buildVideoUrl(filename: string): string {
   const token = storage.get(TOKEN_KEY) ?? '';  // 从 localStorage 读取 JWT
   return `/api/v1/generate/video/file/${encodeURIComponent(filename)}?token=${token}`;
 }
+
+// ── 生成记录列表 ───────────────────────────────────────────────────────────
+
+export interface GenerationRecord {
+  id: string;
+  type: 'image' | 'video';
+  url: string;
+  prompt: string;
+  model_name: string;
+  created_at: string;
+}
+
+/**
+ * 获取用户的生成记录列表
+ */
+export async function listGenerations(): Promise<GenerationRecord[]> {
+  const res = await api.get<{ code: number; data: GenerationRecord[] }>('/generate/list');
+  return res.data.data;
+}

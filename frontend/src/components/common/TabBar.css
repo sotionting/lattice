@@ -1,0 +1,122 @@
+/* TabBar 容器 - 浏览器标签栏样式 */
+.tab-bar {
+  height: 40px; /* 标签栏高度 */
+  display: flex; /* 弹性布局 */
+  align-items: flex-end; /* 标签在底部对齐（浏览器 tab 风格）*/
+  background: rgba(241, 245, 249, 0.9); /* 浅灰透明背景 */
+  backdrop-filter: blur(4px); /* 毛玻璃效果 */
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08); /* 底部细边框 */
+  gap: 0; /* tab 之间无间隙，紧贴相连 */
+}
+
+/* 标签容器 - 可水平滚动 */
+.tab-bar-container {
+  display: flex; /* 水平排列 */
+  align-items: flex-end; /* 标签在底部对齐 */
+  flex: 1; /* 占用剩余空间 */
+  overflow-x: auto; /* 超出时可横向滚动 */
+  overflow-y: hidden; /* 竖向不滚动 */
+  scrollbar-width: none; /* Firefox: 隐藏滚动条 */
+  -webkit-scrollbar: none; /* Chrome: 隐藏滚动条 */
+  scroll-behavior: smooth; /* 平滑滚动 */
+}
+
+/* 隐藏滚动条（Chrome） */
+.tab-bar-container::-webkit-scrollbar {
+  display: none;
+}
+
+/* 单个 Tab - 标签页 */
+.tab {
+  height: 34px; /* Tab 高度 */
+  min-width: 100px; /* 最小宽度 */
+  max-width: 200px; /* 最大宽度（超长 title 时省略） */
+  padding: 0 10px 0 14px; /* 内边距：左边多一点放图标位置 */
+  display: flex; /* 弹性布局 */
+  align-items: center; /* 垂直居中 */
+  gap: 8px; /* title 和关闭按钮之间的间隙 */
+  border-radius: 8px 8px 0 0; /* 上两个圆角，下面是直角（tab 风格） */
+  cursor: pointer; /* 鼠标悬停显示手指 */
+  flex-shrink: 0; /* 防止 flex 压缩这个 tab */
+  background: transparent; /* 非活跃状态：透明背景 */
+  color: #64748b; /* 非活跃状态：灰色文字 */
+  border: none; /* 移除默认边框 */
+  transition: all 0.15s ease-in-out; /* 平滑过渡动画 */
+  white-space: nowrap; /* 文本不换行 */
+  user-select: none; /* 禁止文本选中 */
+}
+
+/* Tab Hover 状态 */
+.tab:hover {
+  background: rgba(255, 255, 255, 0.6); /* hover 时略显白色 */
+}
+
+/* Tab 活跃状态 */
+.tab.active {
+  background: white; /* 活跃：白色背景 */
+  color: #1f2937; /* 活跃：深灰文字 */
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06); /* 上方阴影（浮起效果） */
+  z-index: 10; /* 防止被其他 tab 遮挡 */
+}
+
+/* Tab 标题文本 */
+.tab-title {
+  flex: 1; /* 占用剩余空间 */
+  overflow: hidden; /* 超出隐藏 */
+  text-overflow: ellipsis; /* 超长时显示省略号 */
+  font-size: 13px; /* 字号 */
+  font-weight: 500; /* 稍微加粗 */
+}
+
+/* Tab 关闭按钮 */
+.tab-close {
+  display: flex; /* 弹性布局 */
+  align-items: center; /* 垂直居中 */
+  justify-content: center; /* 水平居中 */
+  width: 18px; /* 按钮大小 */
+  height: 18px;
+  padding: 0; /* 移除默认 padding */
+  background: transparent; /* 透明背景 */
+  border: none; /* 移除边框 */
+  cursor: pointer; /* 手指光标 */
+  opacity: 0; /* 默认隐藏 */
+  color: inherit; /* 继承文字颜色 */
+  transition: opacity 0.15s ease-in-out, color 0.15s ease-in-out; /* 平滑过渡 */
+}
+
+/* Tab 关闭按钮 Hover - 显示 */
+.tab:hover .tab-close {
+  opacity: 1; /* 显示 */
+}
+
+/* Tab 关闭按钮按下时 */
+.tab-close:active {
+  opacity: 0.6; /* 按下时降低不透明度 */
+}
+
+/* 新建 Tab 按钮 - 固定在右侧 */
+.tab-new {
+  width: 32px; /* 宽度 */
+  height: 40px; /* 与 tab-bar 同高 */
+  display: flex; /* 弹性布局 */
+  align-items: center; /* 垂直居中 */
+  justify-content: center; /* 水平居中 */
+  padding: 0; /* 移除 padding */
+  background: transparent; /* 透明背景 */
+  border: none; /* 无边框 */
+  cursor: pointer; /* 手指光标 */
+  color: #64748b; /* 灰色图标 */
+  border-left: 1px solid rgba(0, 0, 0, 0.06); /* 左边界线分隔 */
+  transition: color 0.15s ease-in-out; /* 平滑过渡 */
+  flex-shrink: 0; /* 防止被压缩 */
+}
+
+/* 新建按钮 Hover */
+.tab-new:hover {
+  color: #6366f1; /* 悬停时变成主色调（靛蓝） */
+}
+
+/* 新建按钮按下 */
+.tab-new:active {
+  color: #4f46e5; /* 按下时更深的颜色 */
+}

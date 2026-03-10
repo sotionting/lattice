@@ -2,35 +2,40 @@ import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Layout, Menu } from 'antd';
 import {
-  MessageOutlined,
-  HistoryOutlined,
-  FolderOutlined,
-  ThunderboltOutlined,
-  TeamOutlined,
-  ApiOutlined,
-  ToolOutlined,
-  ClusterOutlined,
-  BarChartOutlined,
-  RobotOutlined,
+  MessageOutlined,     // 对话
+  PictureOutlined,     // 生成
+  HistoryOutlined,     // 历史记录
+  AppstoreOutlined,    // 生成记录
+  RobotOutlined,       // 全能 Agent
+  FolderOutlined,      // 资源库
+  ThunderboltOutlined, // 任务状态
+  TeamOutlined,        // 用户管理
+  ApiOutlined,         // 模型管理
+  ToolOutlined,        // Skill 管理
+  BarChartOutlined,    // 额度管理
 } from '@ant-design/icons';
 import { useUIStore } from '@/store';
 import { useAuthStore } from '@/store/authStore';
 
 const { Sider } = Layout;
 
+// 用户和管理员都可见的菜单项
 const userMenuItems = [
-  { key: '/',              icon: <MessageOutlined />,     label: '对话' },
-  { key: '/conversations', icon: <HistoryOutlined />,     label: '对话历史' },
-  { key: '/agent',         icon: <RobotOutlined />,       label: 'AI Agent' },
-  { key: '/resources',     icon: <FolderOutlined />,      label: '资源库' },
-  { key: '/tasks',         icon: <ThunderboltOutlined />, label: '任务状态' },
+  { key: '/',              icon: <MessageOutlined />,     label: '对话' },        // 新：对话页（原 /conversations）
+  { key: '/generate',      icon: <PictureOutlined />,     label: '生成' },        // 新：生成页（原 /）
+  { key: '/histories',     icon: <HistoryOutlined />,     label: '历史记录' },    // 新：历史记录列表
+  { key: '/generations',   icon: <AppstoreOutlined />,    label: '生成记录' },    // 新：生成记录瀑布流
+  { key: '/agent',         icon: <RobotOutlined />,       label: '全能 Agent' },  // 保留
+  { key: '/resources',     icon: <FolderOutlined />,      label: '资源库' },      // 保留
+  { key: '/tasks',         icon: <ThunderboltOutlined />, label: '任务状态' },    // 保留
 ];
 
+// 管理员专属菜单项（移除 MCP）
 const adminMenuItems = [
   { key: '/admin/users',  icon: <TeamOutlined />,     label: '用户管理' },
   { key: '/admin/models', icon: <ApiOutlined />,      label: '模型管理' },
   { key: '/admin/skills', icon: <ToolOutlined />,     label: 'Skill 管理' },
-  { key: '/admin/mcp',    icon: <ClusterOutlined />,  label: 'MCP 管理' },
+  // { key: '/admin/mcp',    icon: <ClusterOutlined />,  label: 'MCP 管理' }, // 已删除
   { key: '/admin/quota',  icon: <BarChartOutlined />, label: '额度管理' },
 ];
 

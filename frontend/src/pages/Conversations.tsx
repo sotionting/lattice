@@ -1,197 +1,352 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Button, Select, Spin, Modal, Avatar } from 'antd';
 import {
-  Input, Button, List, Avatar, Tag, Empty, Typography, Space,
-  Dropdown, Modal, Popconfirm, message, Spin,
-} from 'antd';
-import {
-  SearchOutlined, MessageOutlined, RobotOutlined,
-  PlusOutlined, EllipsisOutlined, DeleteOutlined, EditOutlined,
+  SendOutlined, RobotOutlined, UserOutlined,
+  ClearOutlined,
 } from '@ant-design/icons';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { conversationService, type ConversationItem } from '@/services/conversation';
+import { useAuthStore } from '@/store/authStore';
+import { streamChat, type ChatMessage as ApiChatMessage } from '@/services/chat';
+import { modelsService, type ActiveModel } from '@/services/models';
 
-const { Text } = Typography;
+interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  time: string;
+}
+
+let _msgIdCounter = 0;
+const nextId = () => `msg-${++_msgIdCounter}`;
+
+const getNow = () => {
+  const d = new Date();
+  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+};
 
 const Conversations: React.FC = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const [conversations, setConversations] = useState<ConversationItem[]>([]);
-  const [search, setSearch] = useState('');
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  // 重命名 Modal 状态
-  const [renameTarget, setRenameTarget] = useState<ConversationItem | null>(null);
-  const [renameValue, setRenameValue] = useState('');
-  const [renaming, setRenaming] = useState(false);
+  const [streaming, setStreaming] = useState(false);
+  const [availableModels, setAvailableModels] = useState<ActiveModel[]>([]);
+  const [selectedModelId, setSelectedModelId] = useState<string | undefined>(undefined);
 
-  // location.key 每次导航到本页都会变化，确保每次进入都重新拉取最新数据
+  const user = useAuthStore((s) => s.user);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // 加载 LLM 模型
   useEffect(() => {
+    modelsService.getActive()
+      .then((models) => {
+        const llmModels = models.filter((m) => m.model_type === 'llm');
+        setAvailableModels(llmModels);
+        const def = llmModels.find((m) => m.is_default) ?? llmModels[0];
+        if (def) setSelectedModelId(def.id);
+      })
+      .catch(() => {});
+  }, []);
+
+  // 滚动到最后
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+  }, [messages, loading]);
+
+  // 发送消息
+  const handleSend = useCallback(async () => {
+    const userContent = input.trim();
+    if (!userContent || loading || streaming) return;
+
+    const userMsg: ChatMessage = {
+      id: nextId(),
+      role: 'user',
+      content: userContent,
+      time: getNow(),
+    };
+
+    setMessages((prev) => [...prev, userMsg]);
+    setInput('');
     setLoading(true);
-    conversationService.list()
-      .then((res) => setConversations(res.items))
-      .catch((e: Error) => message.error(e.message || '加载对话列表失败'))
-      .finally(() => setLoading(false));
-  }, [location.key]);
 
-  const handleRename = async () => {
-    if (!renameTarget || !renameValue.trim()) return;
-    setRenaming(true);
+    const apiMessages: ApiChatMessage[] = [
+      { role: 'system', content: `你是一个AI智能助手。今天是 ${new Date().toLocaleDateString('zh-CN')}。请用中文回答。` },
+      ...messages.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+      { role: 'user', content: userContent },
+    ];
+
+    const assistantMsg: ChatMessage = { id: nextId(), role: 'assistant', content: '', time: getNow() };
+
     try {
-      await conversationService.rename(renameTarget.id, renameValue.trim());
-      setConversations((prev: ConversationItem[]) =>
-        prev.map((c: ConversationItem) => c.id === renameTarget.id ? { ...c, title: renameValue.trim() } : c)
-      );
-      setRenameTarget(null);
-      message.success('重命名成功');
-    } catch (e: any) {
-      message.error(e.message || '重命名失败');
+      const stream = streamChat(apiMessages, undefined, undefined, selectedModelId);
+      let firstToken = true;
+      for await (const delta of stream) {
+        if (firstToken) {
+          firstToken = false;
+          setLoading(false);
+          setStreaming(true);
+          setMessages((prev) => [...prev, { ...assistantMsg }]);
+        }
+        setMessages((prev) => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last.role === 'assistant') updated[updated.length - 1] = { ...last, content: last.content + delta };
+          return updated;
+        });
+      }
+      if (firstToken) {
+        setLoading(false);
+        Modal.error({ title: 'AI 无响应', content: '没有收到任何内容，请检查模型配置。', okText: '关闭' });
+      }
+    } catch (err: any) {
+      setLoading(false);
+      Modal.error({ title: '请求失败', content: err.message || '未知错误', okText: '关闭' });
     } finally {
-      setRenaming(false);
+      setStreaming(false);
     }
-  };
+  }, [input, loading, streaming, messages, selectedModelId]);
 
-  const handleDelete = async (id: string) => {
-    try {
-      await conversationService.remove(id);
-      setConversations((prev: ConversationItem[]) => prev.filter((c: ConversationItem) => c.id !== id));
-      message.success('对话已删除');
-    } catch (e: any) {
-      message.error(e.message || '删除失败');
-    }
+  const handleClear = () => {
+    setMessages([]);
+    setInput('');
   };
-
-  const filtered = conversations.filter((c: ConversationItem) =>
-    c.title.includes(search) || (c.last_message ?? '').includes(search)
-  );
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* 页面头部 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+      {/* 顶部工具栏 */}
+      <div style={{
+        height: 56,
+        padding: '0 20px',
+        flexShrink: 0,
+        background: 'rgba(255,255,255,0.72)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderBottom: '1px solid rgba(255,255,255,0.55)',
+        boxShadow: '0 1px 12px rgba(99,102,241,0.06)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        {/* 左：标题 */}
         <div>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>对话历史</h2>
-          <Text type="secondary" style={{ fontSize: 13 }}>共 {conversations.length} 条对话记录</Text>
+          <div style={{ fontWeight: 600, fontSize: 14, color: '#1e293b' }}>AI 对话</div>
+          <div style={{ fontSize: 11, color: '#94a3b8' }}>智能助手对话</div>
         </div>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/')} style={{ borderRadius: 8 }}>
-          新建对话
-        </Button>
-      </div>
 
-      <Input
-        prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
-        placeholder="搜索对话标题或内容..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        style={{ marginBottom: 16, borderRadius: 8 }}
-        allowClear
-      />
-
-      <div style={{ flex: 1, overflowY: 'auto', background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-        <Spin spinning={loading}>
-          {!loading && filtered.length === 0 ? (
-            <Empty
-              image={<MessageOutlined style={{ fontSize: 64, color: '#d9d9d9' }} />}
-              imageStyle={{ height: 80, marginTop: 40 }}
-              description={<span style={{ color: '#8c8c8c' }}>{search ? '未找到匹配的对话' : '还没有对话记录'}</span>}
-              style={{ padding: '60px 0' }}
-            >
-              {!search && (
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/')}>
-                  开始第一次对话
-                </Button>
-              )}
-            </Empty>
-          ) : (
-            <List
-              dataSource={filtered}
-              renderItem={(item: ConversationItem) => (
-                <List.Item
-                  key={item.id}
-                  style={{ padding: '14px 20px', cursor: 'pointer', transition: 'background 0.15s', borderBottom: '1px solid #f5f5f5' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = '#f8f9ff')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                  onClick={() => navigate(`/?cid=${item.id}`)}
-                  actions={[
-                    <Dropdown
-                      key="actions"
-                      menu={{
-                        items: [
-                          {
-                            key: 'rename', icon: <EditOutlined />, label: '重命名',
-                            onClick: ({ domEvent }) => {
-                              domEvent.stopPropagation();
-                              setRenameTarget(item);
-                              setRenameValue(item.title);
-                            },
-                          },
-                          {
-                            key: 'delete', icon: <DeleteOutlined />, danger: true,
-                            label: (
-                              <Popconfirm
-                                title="确认删除这条对话？"
-                                description="对话内所有消息将一并删除，无法恢复。"
-                                onConfirm={(e) => { e?.stopPropagation(); handleDelete(item.id); }}
-                                okText="删除" cancelText="取消" okButtonProps={{ danger: true }}
-                              >
-                                <span onClick={(e) => e.stopPropagation()}>删除</span>
-                              </Popconfirm>
-                            ),
-                          },
-                        ],
-                      }}
-                      trigger={['click']}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Button type="text" icon={<EllipsisOutlined />} size="small" onClick={(e) => e.stopPropagation()} />
-                    </Dropdown>,
-                  ]}
-                >
-                  <List.Item.Meta
-                    avatar={<Avatar icon={<RobotOutlined />} style={{ background: 'linear-gradient(135deg, #1677ff, #0958d9)' }} />}
-                    title={
-                      <Space>
-                        <span style={{ fontWeight: 500, fontSize: 14 }}>{item.title}</span>
-                        {item.model_id && <Tag color="blue" style={{ fontSize: 11, marginLeft: 4 }}>{item.model_id}</Tag>}
-                      </Space>
-                    }
-                    description={
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text type="secondary" ellipsis style={{ maxWidth: 420, fontSize: 13 }}>
-                          {item.last_message ?? '（暂无消息）'}
-                        </Text>
-                        <Space size={8} style={{ flexShrink: 0, marginLeft: 12 }}>
-                          <Text type="secondary" style={{ fontSize: 12 }}>
-                            {new Date(item.updated_at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                          </Text>
-                          <Tag style={{ margin: 0, fontSize: 11 }}>{item.message_count} 条</Tag>
-                        </Space>
-                      </div>
-                    }
-                  />
-                </List.Item>
-              )}
+        {/* 右：模型选择 + 清空 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {availableModels.length > 0 && (
+            <Select
+              value={selectedModelId}
+              onChange={(val) => setSelectedModelId(val)}
+              disabled={loading || streaming}
+              size="small"
+              style={{ width: 160 }}
+              placeholder="选择模型"
+              options={availableModels.map((m) => ({
+                value: m.id,
+                label: m.is_default ? `★ ${m.name}` : m.name,
+              }))}
             />
           )}
-        </Spin>
+          <Button
+            icon={<ClearOutlined />}
+            size="small"
+            onClick={handleClear}
+            disabled={messages.length === 0}
+            style={{ borderRadius: 8 }}
+          >
+            清空
+          </Button>
+        </div>
       </div>
 
-      {/* 重命名 Modal */}
-      <Modal
-        title="重命名对话"
-        open={!!renameTarget}
-        onOk={handleRename}
-        onCancel={() => setRenameTarget(null)}
-        confirmLoading={renaming}
-        okText="保存" cancelText="取消"
-      >
-        <Input
-          value={renameValue}
-          onChange={(e) => setRenameValue(e.target.value)}
-          onPressEnter={handleRename}
-          placeholder="输入新标题"
-          maxLength={100}
-          style={{ marginTop: 8 }}
-        />
-      </Modal>
+      {/* 消息区 */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 20px 12px' }}>
+        <div style={{ maxWidth: 760, margin: '0 auto' }}>
+          {messages.length === 0 && !loading && (
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: '52vh',
+              gap: 16,
+            }}>
+              <div style={{
+                width: 80,
+                height: 80,
+                borderRadius: 24,
+                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 12px 36px rgba(99,102,241,0.40)',
+              }}>
+                <RobotOutlined style={{ color: '#fff', fontSize: 36 }} />
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 26, fontWeight: 700, color: '#1e293b', marginBottom: 8 }}>
+                  有什么可以帮你的？
+                </div>
+                <div style={{ fontSize: 14, color: '#64748b', lineHeight: 1.6 }}>
+                  我是你的 AI 助手，可以回答问题、提供建议、帮助写作等。
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 消息列表 */}
+          {messages.map((msg) => (
+            <div key={msg.id} style={{ marginBottom: 20 }}>
+              {msg.role === 'user' ? (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, alignItems: 'flex-end' }}>
+                  <div style={{ maxWidth: '72%' }}>
+                    <div style={{
+                      padding: '11px 16px',
+                      background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                      color: '#fff',
+                      borderRadius: '18px 4px 18px 18px',
+                      fontSize: 14,
+                      lineHeight: 1.6,
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      boxShadow: '0 4px 16px rgba(99,102,241,0.35)',
+                    }}>
+                      {msg.content}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#94a3b8', textAlign: 'right', marginTop: 4 }}>
+                      {msg.time}
+                    </div>
+                  </div>
+                  <Avatar size={34} style={{
+                    background: 'linear-gradient(135deg, #22c55e, #16a34a)',
+                    flexShrink: 0,
+                    fontSize: 13,
+                    fontWeight: 700,
+                  }}>
+                    {user?.username?.charAt(0).toUpperCase() || <UserOutlined />}
+                  </Avatar>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                  <Avatar size={34} icon={<RobotOutlined />}
+                    style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      padding: '12px 16px',
+                      background: 'rgba(255,255,255,0.78)',
+                      backdropFilter: 'blur(16px)',
+                      WebkitBackdropFilter: 'blur(16px)',
+                      color: '#1e293b',
+                      borderRadius: '4px 18px 18px 18px',
+                      fontSize: 14,
+                      lineHeight: 1.6,
+                      boxShadow: '0 2px 14px rgba(0,0,0,0.06)',
+                      border: '1px solid rgba(255,255,255,0.65)',
+                      wordBreak: 'break-word',
+                      whiteSpace: 'pre-wrap',
+                    }}>
+                      {msg.content}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+                      {msg.time}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* Loading 动画 */}
+          {loading && (
+            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+              <Avatar size={34} icon={<RobotOutlined />}
+                style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', flexShrink: 0 }} />
+              <div style={{
+                padding: '12px 16px',
+                background: 'rgba(255,255,255,0.78)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+                borderRadius: '4px 18px 18px 18px',
+                boxShadow: '0 2px 14px rgba(0,0,0,0.06)',
+                border: '1px solid rgba(255,255,255,0.65)',
+              }}>
+                <Spin size="small" />
+              </div>
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
+        </div>
+      </div>
+
+      {/* 输入区 */}
+      <div style={{ padding: '0 20px 18px', flexShrink: 0 }}>
+        <div style={{ maxWidth: 760, margin: '0 auto' }}>
+          <div style={{
+            background: 'rgba(255,255,255,0.84)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255,255,255,0.65)',
+            borderRadius: 18,
+            boxShadow: '0 8px 32px rgba(99,102,241,0.10)',
+            padding: '10px 14px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+                }}
+                placeholder="输入消息… (Enter 发送，Shift+Enter 换行)"
+                rows={1}
+                disabled={loading || streaming}
+                style={{
+                  flex: 1,
+                  border: 'none',
+                  outline: 'none',
+                  resize: 'none',
+                  fontSize: 14,
+                  lineHeight: 1.65,
+                  color: '#1e293b',
+                  background: 'transparent',
+                  padding: '4px 0',
+                  minHeight: 26,
+                  maxHeight: 160,
+                  overflowY: 'auto',
+                  fontFamily: 'inherit',
+                }}
+                onInput={(e) => {
+                  const el = e.currentTarget;
+                  el.style.height = 'auto';
+                  el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+                }}
+              />
+              <Button
+                type="primary"
+                icon={<SendOutlined />}
+                onClick={handleSend}
+                loading={loading}
+                disabled={!input.trim() || streaming}
+                style={{
+                  flexShrink: 0,
+                  borderRadius: 11,
+                  background: input.trim() && !streaming ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : undefined,
+                  border: 'none',
+                  height: 35,
+                  paddingInline: 18,
+                  boxShadow: input.trim() && !streaming ? '0 4px 14px rgba(99,102,241,0.40)' : 'none',
+                }}
+              >
+                发送
+              </Button>
+            </div>
+          </div>
+          <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 11, marginTop: 9 }}>
+            Enter 发送 &nbsp;·&nbsp; Shift+Enter 换行
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

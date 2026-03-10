@@ -13,11 +13,14 @@
 
 ## 二、项目概述
 
-**项目名称：** AI Agent 对话平台
-**项目路径：** `d:\soiton2026`
+**项目名称：** Lattice
+**GitHub：** https://github.com/sotionting/lattice
+**项目路径（macOS）：** `/Users/sotionting/Desktop/soiton2026`
 **技术栈：** Python FastAPI + React + TypeScript + PostgreSQL + Redis + Celery + Docker + Nginx
 
 **产品定位：** 以聊天为主界面，用户发消息给 Agent，Agent 调用各类 Skill 完成任务。管理员可配置模型 API、Skill、MCP 服务器、用户额度。
+
+**安全规范：** 所有 AI 模型 API Key 统一在前端「模型 API 管理」页面配置到数据库，不在 .env 或代码中硬编码。
 
 ---
 
@@ -25,7 +28,7 @@
 
 ### ✅ 已完成
 - 7 个 Docker 容器全部运行（postgres / redis / backend / celery_worker / celery_beat / frontend / nginx）
-- 数据库已初始化（alembic upgrade head 已运行），管理员账号已创建（admin / admin123456）
+- 数据库已初始化（alembic upgrade head 已运行），管理员账号通过 ADMIN_PASSWORD 环境变量创建（不再有默认密码）
 - 后端真实 JWT 认证（登录验 DB、bcrypt 密码、jose 签 token）
 - 用户管理 CRUD 完整实现（前端表格 + 后端 API）
 - 登录正常（Vite proxy 已修复，改用 host.docker.internal:8000）
@@ -153,6 +156,19 @@
 > docker-compose exec backend alembic upgrade head              # 创建 skills 表
 > ```
 
+### ✅ v3.0 新增（2026-03-10）
+- **安全审计全面清理**：
+  - `backend/app/config.py`：移除 `OPENAI_API_KEY`、`ANTHROPIC_API_KEY`、所有 MiMo 硬编码字段；项目名更新为 Lattice
+  - `backend/app/agents/llm_factory.py`：移除 `os.getenv` API Key 回退，所有密钥统一从 DB 读取
+  - `docker-compose.yml`：DB 密码改为 `${POSTGRES_PASSWORD}` 环境变量引用，不再硬编码
+  - `scripts/create_admin.py` + `backend/scripts/create_admin.py`：移除默认密码 admin123456，强制要求 ADMIN_PASSWORD 环境变量
+  - `.gitignore`：新增 `Agent/`、`.claude/`、`celerybeat-schedule*`、`**/.env` 等排除规则
+  - `.env.example`：提供安全配置模板，注明 API Key 在前端管理页配置
+- **额度管理页修复**：修复 axios 数据路径（`sumRes.data.data` 而非 `sumRes.data`）；修复 Ant Design v5 `bodyStyle` → `styles={{ body: {} }}` 废弃警告
+- **项目重命名为 Lattice**：config.py PROJECT_NAME、README.md 标题
+- **GitHub 发布**：项目首次推送至 https://github.com/sotionting/lattice（已验证无密钥泄露）
+- **个人 GitHub 主页 README 恢复**：force push 误覆盖后从 git object 还原
+
 ### ⏳ 待实现
 - MCP 管理后端（MCPServer 数据模型 + 连通测试 API）
 - 额度管理后端（UsageRecord 表 + 用量记录写入 API）
@@ -248,6 +264,16 @@
 **状态：** 已解决 ✅ / 待验证 ⏳ / 未解决 ❌
 ```
 
+### GitHub 发布规则（重要）
+
+**每次更新 MD 文件或完成一个开发阶段后，必须询问用户：**
+
+> "MD 文件已更新完毕。要把这次的改动同步推送到 GitHub（https://github.com/sotionting/lattice）吗？"
+
+- **不得自动 push**，必须等用户确认
+- 用户说"推"/"发布"/"同步"才执行 `git add` → `git commit` → `git push`
+- push 前确认 `.gitignore` 正常，绝不允许携带 `.env`、API Key、JWT secret
+
 ---
 
 ## 六、已知问题 / 踩过的坑（每次操作前对照检查，不允许重复踩坑）
@@ -328,7 +354,7 @@
 ## 八、快速启动
 
 ```bash
-cd d:\soiton2026
+cd /Users/sotionting/Desktop/soiton2026   # macOS 路径
 docker-compose up -d        # 启动所有容器
 docker-compose ps           # 确认 7 个容器都是 running
 ```
@@ -336,7 +362,7 @@ docker-compose ps           # 确认 7 个容器都是 running
 访问：
 - **前端**：http://localhost:5173
 - **API 文档**：http://localhost:8000/api/v1/docs
-- **管理员账号**：admin / admin123456
+- **管理员账号**：admin / （.env 中 ADMIN_PASSWORD 的值）
 
 ---
 

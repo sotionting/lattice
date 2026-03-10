@@ -41,6 +41,7 @@ class AgentRunRequest(BaseModel):
     agent_type: str                      # Agent 类型：search | repl | chat | csv
     prompt: str                          # 用户输入
     model_id: Optional[str] = None       # LLM 模型 UUID，不传则用默认 LLM 模型
+    conversation_id: Optional[str] = None # 对话 ID，若提供则加载历史消息作为上下文
     csv_path: Optional[str] = None       # CsvAgent 专用：CSV 文件路径
 
 
@@ -113,20 +114,28 @@ def _run_agent_sync(
     tools: list,
     agent_cfg: dict,
     csv_path: Optional[str],
+    conversation_history: Optional[str] = None,
 ) -> str:
     """
     同步运行 Agent（在线程池中执行，不阻塞事件循环）。
     接收预构建好的 llm 和 tools，不再依赖 YAML 配置。
+
+    如果 conversation_history 非空，会附加在系统提示词中以维护上下文。
     """
     from langchain.agents import create_tool_calling_agent, AgentExecutor
     from langchain_core.prompts import ChatPromptTemplate
 
+    # 构建系统提示词：包含对话历史上下文（若有）
+    system_prompt = (
+        "你是一个智能 AI 助手，拥有多种工具能力。"
+        "根据用户需求，合理调用工具完成任务，并用中文解释每步操作和最终结果。"
+    )
+    if conversation_history:
+        system_prompt += f"\n\n【对话历史】\n{conversation_history}"
+
     # 通用提示词模板
     prompt_template = ChatPromptTemplate.from_messages([
-        ("system", (
-            "你是一个智能 AI 助手，拥有多种工具能力。"
-            "根据用户需求，合理调用工具完成任务，并用中文解释每步操作和最终结果。"
-        )),
+        ("system", system_prompt),
         ("human", "{input}"),
         ("placeholder", "{agent_scratchpad}"),  # 工具调用中间过程的占位符
     ])
@@ -236,12 +245,14 @@ async def run_agent(
     运行指定 Agent。
 
     调用链路：
-      前端选 model_id + agent_type + prompt
+      前端选 agent_type + prompt + model_id + 可选 conversation_id
         → 从 DB 查 ModelConfig（LLM 大脑）
-          → build_llm_from_model_config → LangChain LLM 实例
-            → _build_tools(db, llm) → 工具列表（含图片/视频/Skills）
-              → 线程池 _run_agent_sync → 返回结果
+          → 若有 conversation_id，加载历史消息作为上下文
+            → build_llm_from_model_config → LangChain LLM 实例
+              → _build_tools(db, llm) → 工具列表（含图片/视频/Skills）
+                → 线程池 _run_agent_sync → 返回结果
     """
+    # 参数校验
     if req.agent_type not in ("search", "repl", "chat", "csv"):
         raise HTTPException(
             status_code=400,
@@ -251,34 +262,105 @@ async def run_agent(
         raise HTTPException(status_code=400, detail="prompt 不能为空")
 
     # 1. 从 DB 查找 LLM 模型配置（验证可用性 + API Key）
-    model = _find_llm_model(db, req.model_id)
+    try:
+        model = _find_llm_model(db, req.model_id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"模型查询失败: {str(e)}")
 
-    # 2. 用 DB 配置构建 LangChain LLM 实例（这里是实际的大脑）
-    from app.agents.llm_factory import build_llm_from_model_config
-    llm = build_llm_from_model_config(model)
+    # 2. 若提供了 conversation_id，加载历史消息作为上下文
+    conversation_history = None
+    if req.conversation_id:
+        try:
+            from app.models.conversation import Conversation, Message
+            conv = db.query(Conversation).filter(
+                Conversation.id == req.conversation_id,
+                Conversation.user_id == current_user.id,
+            ).first()
 
-    # 3. 构建工具列表（图片/视频/Skills 全部自动从 DB 装配）
-    tools = _build_tools(db, llm)
+            if conv:
+                messages = db.query(Message).filter(
+                    Message.conversation_id == conv.id
+                ).order_by(Message.created_at).all()
 
-    # 4. 读取 Agent 专项配置（max_iterations 等），不影响 LLM 选择
+                # 格式化历史消息
+                history_lines = []
+                for msg in messages[-10:]:  # 只取最近 10 条消息，避免 token 溢出
+                    role = "用户" if msg.role == "user" else "助手" if msg.role == "assistant" else msg.role
+                    history_lines.append(f"{role}：{msg.content[:200]}")  # 消息内容截断到 200 字
+                if history_lines:
+                    conversation_history = "\n".join(history_lines)
+        except Exception as e:
+            # 历史加载失败不阻断执行，继续执行 Agent
+            pass
+
+    # 3. 用 DB 配置构建 LangChain LLM 实例（这里是实际的大脑）
+    try:
+        from app.agents.llm_factory import build_llm_from_model_config
+        llm = build_llm_from_model_config(model)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"LLM 实例化失败: {str(e)}")
+
+    # 4. 构建工具列表（图片/视频/Skills 全部自动从 DB 装配）
+    try:
+        tools = _build_tools(db, llm)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"工具加载失败: {str(e)}")
+
+    # 5. 读取 Agent 专项配置（max_iterations 等），不影响 LLM 选择
     from pathlib import Path
     import yaml
     cfg_path = Path(__file__).parent.parent.parent.parent / "configs" / "agents_config.yaml"
     agent_cfg = {}
     if cfg_path.exists():
-        with open(cfg_path, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
-            agent_cfg = data.get("agents", {}).get(req.agent_type, {})
+        try:
+            with open(cfg_path, "r", encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+                agent_cfg = data.get("agents", {}).get(req.agent_type, {})
+        except Exception:
+            pass  # 配置加载失败不阻断执行
 
     try:
-        # 5. 在线程池中运行同步 Agent（不阻塞 async 事件循环）
+        # 6. 在线程池中运行同步 Agent（不阻塞 async 事件循环）
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
             _executor,
-            lambda: _run_agent_sync(req.agent_type, req.prompt, llm, tools, agent_cfg, req.csv_path),
+            lambda: _run_agent_sync(
+                req.agent_type,
+                req.prompt,
+                llm,
+                tools,
+                agent_cfg,
+                req.csv_path,
+                conversation_history,
+            ),
         )
+    except ValueError as e:
+        # 参数验证错误
+        raise HTTPException(status_code=400, detail=f"参数错误: {str(e)}")
     except Exception as e:
+        # 真正的执行错误
         raise HTTPException(status_code=500, detail=f"Agent 执行失败: {str(e)}")
+
+    # 7. 若提供了 conversation_id，保存结果到对话
+    if req.conversation_id:
+        try:
+            from app.models.conversation import Message
+            db.add(Message(
+                conversation_id=req.conversation_id,
+                role="user",
+                content=req.prompt,
+            ))
+            db.add(Message(
+                conversation_id=req.conversation_id,
+                role="assistant",
+                content=result,
+            ))
+            db.commit()
+        except Exception as e:
+            # 保存失败不影响返回结果
+            db.rollback()
 
     return {
         "code": 200,

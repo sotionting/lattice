@@ -2,15 +2,11 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { Button, Avatar, Tooltip, Modal, Spin, Select, Image as AntImage, Segmented } from 'antd';
 import {
   SendOutlined, RobotOutlined, UserOutlined,
-  PlusOutlined, PaperClipOutlined, CloseCircleFilled,
-  MessageOutlined, PictureOutlined, VideoCameraOutlined,
+  PaperClipOutlined, CloseCircleFilled,
+  PictureOutlined, VideoCameraOutlined,
 } from '@ant-design/icons';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { useAuthStore } from '@/store/authStore';
-import { streamChat, type ChatMessage as ApiChatMessage, type ContentPart } from '@/services/chat';
-import { conversationService } from '@/services/conversation';
 import { modelsService, type ActiveModel } from '@/services/models';
 import { generateImage, generateVideo, buildVideoUrl } from '@/services/generate';
 
@@ -44,30 +40,21 @@ const getNow = () => {
   return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
 };
 
-const VIDEO_EXTS = /\.(mp4|webm|mov|avi|mkv)$/i;
-const AUDIO_EXTS = /\.(mp3|wav|ogg|aac|flac|m4a|opus)$/i;
 
 // ── 模式配置 ─────────────────────────────────────────────────────────────────
-type ChatMode = 'chat' | 'image' | 'video';
+type ChatMode = 'image' | 'video';
 
 const MODE_COLOR: Record<ChatMode, string> = {
-  chat:  '#6366f1',
   image: '#ec4899',
   video: '#8b5cf6',
 };
 
 const MODE_GRADIENT: Record<ChatMode, string> = {
-  chat:  'linear-gradient(135deg, #6366f1, #8b5cf6)',
   image: 'linear-gradient(135deg, #ec4899, #be185d)',
   video: 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
 };
 
 const MODE_WELCOME = {
-  chat: {
-    title: '有什么可以帮你的？',
-    desc: '我是你的 AI 助手，可以回答问题、写代码、分析图片，也可以总结文档。',
-    examples: ['帮我用 Python 写一个快速排序', '解释一下什么是 Transformer 模型', '帮我把这段话翻译成英文'],
-  },
   image: {
     title: '描述画面，AI 为你创作',
     desc: '输入文字描述，AI 将根据你的想象生成图片。\n支持 Google Imagen 3 等图片模型。',
@@ -81,7 +68,6 @@ const MODE_WELCOME = {
 };
 
 const MODE_PLACEHOLDER: Record<ChatMode, string> = {
-  chat:  '发送消息… (Enter 发送，Shift+Enter 换行)',
   image: '描述你想生成的图片，例如：一只在雪地里奔跑的哈士奇，写实风格…',
   video: '描述你想生成的视频内容，例如：海浪拍打礁石，慢动作，4K…（生成约需 1~5 分钟）',
 };
@@ -154,16 +140,14 @@ const Chat: React.FC = () => {
   const [streaming, setStreaming] = useState(false);  // 文字流式输出中
   const [initLoading, setInitLoading] = useState(false); // 加载历史对话中
 
-  const [conversationId, setConversationId] = useState<string | undefined>(undefined);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isDragging, setIsDragging] = useState(false);
-  const [chatMode, setChatMode] = useState<ChatMode>('chat');
+  const [chatMode, setChatMode] = useState<ChatMode>('image');
 
   const [availableModels, setAvailableModels] = useState<ActiveModel[]>([]);
   const [selectedModelId, setSelectedModelId] = useState<string | undefined>(undefined);
 
   const user = useAuthStore((s) => s.user);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
 
@@ -178,69 +162,7 @@ const Chat: React.FC = () => {
       .catch(() => {});
   }, []);
 
-  // ── Effect：URL ?cid=xxx → 加载历史对话 ────────────────────────────────────
-  useEffect(() => {
-    const cid = searchParams.get('cid');
-    if (!cid) {
-      setConversationId(undefined);
-      setMessages([]);
-      return;
-    }
-    setInitLoading(true);
-    conversationService.get(cid)
-      .then((conv) => {
-        setConversationId(conv.id);
-        if (conv.messages.length === 0) { setMessages([]); return; }
 
-        const IMAGE_MARKER = /\[IMAGE_DATA\]([\s\S]*?)\[\/IMAGE_DATA\]/g;
-        // [VIDEO_FILE]filename.mp4[/VIDEO_FILE] — 提取文件名后用 buildVideoUrl 构造播放 URL
-        const VIDEO_MARKER = /\[VIDEO_FILE\]([\s\S]*?)\[\/VIDEO_FILE\]/g;
-
-        const loaded: ChatMessage[] = conv.messages.map((m) => {
-          const time = new Date(m.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-
-          if (m.role === 'assistant' && m.content.includes('[IMAGE_DATA]')) {
-            // 图片类消息：解析 base64 DataURL，存入 generatedImages
-            const genImages: string[] = [];
-            let match;
-            IMAGE_MARKER.lastIndex = 0;
-            while ((match = IMAGE_MARKER.exec(m.content)) !== null) genImages.push(match[1]);
-            const textContent = m.content.replace(/\[IMAGE_DATA\][\s\S]*?\[\/IMAGE_DATA\]/g, '').trim();
-            return { id: m.id, role: 'assistant' as const, content: textContent, time, generatedImages: genImages };
-          }
-
-          if (m.role === 'assistant' && m.content.includes('[VIDEO_FILE]')) {
-            // 视频类消息：解析文件名，用 buildVideoUrl 构造带 JWT 的播放 URL
-            const genVideos: string[] = [];
-            let match;
-            VIDEO_MARKER.lastIndex = 0;
-            while ((match = VIDEO_MARKER.exec(m.content)) !== null) {
-              genVideos.push(buildVideoUrl(match[1]));  // 文件名 → 带 token 的 API 路径
-            }
-            const textContent = m.content.replace(/\[VIDEO_FILE\][\s\S]*?\[\/VIDEO_FILE\]/g, '').trim();
-            return { id: m.id, role: 'assistant' as const, content: textContent, time, generatedVideos: genVideos };
-          }
-
-          return { id: m.id, role: m.role as 'user' | 'assistant', content: m.content, time };
-        });
-
-        setMessages(loaded);
-
-        // 自动推断模式：有生成图片 → image 模式，有生成视频 → video 模式，其余 → chat
-        const hasImages = loaded.some((m) => m.generatedImages && m.generatedImages.length > 0);
-        const hasVideos = loaded.some((m) => m.generatedVideos && m.generatedVideos.length > 0);
-        if (hasVideos) setChatMode('video');
-        else if (hasImages) setChatMode('image');
-        else setChatMode('chat');
-      })
-      .catch(() => navigate('/', { replace: true }))
-      .finally(() => setInitLoading(false));
-  }, [searchParams, navigate]);
-
-  // ── Effect：消息变化时滚动到底部 ───────────────────────────────────────────
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
-  }, [messages, loading]);
 
   // ── 按模式过滤模型列表 ────────────────────────────────────────────────────
   const modeModels = useMemo(() => {
@@ -272,8 +194,7 @@ const Chat: React.FC = () => {
     setSelectedModelId(undefined);   // 清除已选模型，让 Effect 重新自动选默认
     setMessages([]);
     setAttachments([]);
-    navigate('/', { replace: true });
-  }, [navigate]);
+  }, []);
 
   // ── 文件处理 ──────────────────────────────────────────────────────────────
   const processFiles = useCallback(async (files: File[]) => {
@@ -336,14 +257,6 @@ const Chat: React.FC = () => {
     });
   }, []);
 
-  // ── 新建对话 ─────────────────────────────────────────────────────────────
-  const handleNew = useCallback(() => {
-    if (loading || streaming) return;
-    setConversationId(undefined);
-    setMessages([]);
-    setAttachments([]);
-    navigate('/', { replace: true });
-  }, [loading, streaming, navigate]);
 
   // ── 发送（核心逻辑）──────────────────────────────────────────────────────
   const handleSend = useCallback(async () => {
@@ -435,80 +348,7 @@ const Chat: React.FC = () => {
       return;
     }
 
-    // ── 对话模式（SSE 流式）────────────────────────────────────────────────
-    const userMsg: ChatMessage = {
-      id: nextId(), role: 'user', content: userContent, time: getNow(),
-      attachments: currentAttachments,
-    };
-    setMessages((prev) => [...prev, userMsg]);
-    setInput('');
-    setAttachments([]);
-    setLoading(true);
-
-    const imageAtts = currentAttachments.filter((a) => a.type === 'image');
-    const videoAtts = currentAttachments.filter((a) => a.type === 'video');
-    const audioAtts = currentAttachments.filter((a) => a.type === 'audio');
-
-    let apiUserContent: ApiChatMessage['content'];
-    if (imageAtts.length > 0) {
-      const parts: ContentPart[] = imageAtts.map((a) => ({ type: 'image_url' as const, image_url: { url: a.dataUrl } }));
-      const textLines: string[] = [];
-      if (videoAtts.length > 0) textLines.push(videoAtts.map((a) => `[视频文件: ${a.name}]`).join(' '));
-      if (audioAtts.length > 0) textLines.push(audioAtts.map((a) => `[音频文件: ${a.name}]`).join(' '));
-      if (userContent) textLines.push(userContent);
-      if (textLines.length > 0) parts.push({ type: 'text', text: textLines.join('\n') });
-      apiUserContent = parts;
-    } else {
-      const textLines: string[] = [];
-      if (videoAtts.length > 0) textLines.push(videoAtts.map((a) => `[视频文件: ${a.name}]`).join(' '));
-      if (audioAtts.length > 0) textLines.push(audioAtts.map((a) => `[音频文件: ${a.name}]`).join(' '));
-      if (userContent) textLines.push(userContent);
-      apiUserContent = textLines.join('\n') || '';
-    }
-
-    const apiMessages: ApiChatMessage[] = [
-      { role: 'system', content: `你是一个AI智能助手。今天是 ${new Date().toLocaleDateString('zh-CN')}。请用中文回答。` },
-      ...messages.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-      { role: 'user', content: apiUserContent },
-    ];
-
-    const assistantMsg: ChatMessage = { id: nextId(), role: 'assistant', content: '', time: getNow() };
-
-    try {
-      const stream = streamChat(
-        apiMessages, conversationId,
-        (newConvId) => {
-          setConversationId(newConvId);
-          navigate(`/?cid=${newConvId}`, { replace: true });
-        },
-        selectedModelId,
-      );
-      let firstToken = true;
-      for await (const delta of stream) {
-        if (firstToken) {
-          firstToken = false;
-          setLoading(false);
-          setStreaming(true);
-          setMessages((prev) => [...prev, { ...assistantMsg }]);
-        }
-        setMessages((prev) => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last.role === 'assistant') updated[updated.length - 1] = { ...last, content: last.content + delta };
-          return updated;
-        });
-      }
-      if (firstToken) {
-        setLoading(false);
-        Modal.error({ title: 'AI 无响应', content: '没有收到任何内容，请检查模型配置（API Key / 模型 ID）。', okText: '关闭' });
-      }
-    } catch (err: any) {
-      setLoading(false);
-      Modal.error({ title: '请求失败', content: err.message || '未知错误，请检查网络或模型配置', okText: '关闭' });
-    } finally {
-      setStreaming(false);
-    }
-  }, [input, attachments, loading, streaming, messages, conversationId, navigate, selectedModelId, chatMode]);
+  }, [input, attachments, loading, streaming, navigate, selectedModelId, chatMode]);
 
   // ── 渲染 ─────────────────────────────────────────────────────────────────
   const color = MODE_COLOR[chatMode];
@@ -555,9 +395,7 @@ const Chat: React.FC = () => {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             boxShadow: `0 3px 10px ${color}45`,
           }}>
-            {chatMode === 'chat'
-              ? <MessageOutlined style={{ color: '#fff', fontSize: 15 }} />
-              : chatMode === 'image'
+            {chatMode === 'image'
               ? <PictureOutlined style={{ color: '#fff', fontSize: 15 }} />
               : <VideoCameraOutlined style={{ color: '#fff', fontSize: 15 }} />}
           </div>
@@ -572,7 +410,7 @@ const Chat: React.FC = () => {
           </div>
         </div>
 
-        {/* 右：模型选择 + 新建 */}
+        {/* 右：模型选择 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {modeModels.length > 0 && (
             <Select
@@ -588,12 +426,6 @@ const Chat: React.FC = () => {
               }))}
             />
           )}
-          <Tooltip title="新建对话">
-            <Button icon={<PlusOutlined />} size="small" onClick={handleNew}
-              disabled={loading || streaming} style={{ borderRadius: 8 }}>
-              新建
-            </Button>
-          </Tooltip>
         </div>
       </div>
 
@@ -618,9 +450,7 @@ const Chat: React.FC = () => {
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 boxShadow: `0 12px 36px ${color}40, 0 4px 12px ${color}30`,
               }}>
-                {chatMode === 'chat'
-                  ? <MessageOutlined style={{ color: '#fff', fontSize: 36 }} />
-                  : chatMode === 'image'
+                {chatMode === 'image'
                   ? <PictureOutlined style={{ color: '#fff', fontSize: 36 }} />
                   : <VideoCameraOutlined style={{ color: '#fff', fontSize: 36 }} />}
               </div>
@@ -665,7 +495,7 @@ const Chat: React.FC = () => {
               </div>
 
               {/* 无对应模型时的提醒 */}
-              {chatMode === 'image' && availableModels.every((m) => m.model_type !== 'image') && (
+              {availableModels.every((m) => m.model_type !== 'image') && chatMode === 'image' && (
                 <div style={{
                   padding: '10px 20px', borderRadius: 12,
                   background: 'rgba(255,248,235,0.85)', backdropFilter: 'blur(10px)',
@@ -674,7 +504,7 @@ const Chat: React.FC = () => {
                   ⚠️ 请先在「模型管理」页添加图片模型（分类选「图片模型」）
                 </div>
               )}
-              {chatMode === 'video' && availableModels.every((m) => m.model_type !== 'video') && (
+              {availableModels.every((m) => m.model_type !== 'video') && chatMode === 'video' && (
                 <div style={{
                   padding: '10px 20px', borderRadius: 12,
                   background: 'rgba(245,243,255,0.85)', backdropFilter: 'blur(10px)',
@@ -686,14 +516,13 @@ const Chat: React.FC = () => {
             </div>
           )}
 
-          {/* ── 消息列表 ── */}
+          {/* ── 消息列表（仅显示生成的结果）── */}
           {messages.map((msg) => (
             <div key={msg.id} style={{ marginBottom: 28 }}>
               {msg.role === 'user' ? (
-                /* 用户消息 — 右对齐，渐变气泡 */
+                /* 用户消息 — 右对齐 */
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, alignItems: 'flex-end' }}>
                   <div style={{ maxWidth: '72%' }}>
-                    {/* 附件预览 */}
                     {msg.attachments && msg.attachments.length > 0 && (
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'flex-end', marginBottom: msg.content ? 7 : 0 }}>
                         {msg.attachments.map((att) =>
@@ -735,7 +564,7 @@ const Chat: React.FC = () => {
                   </Avatar>
                 </div>
               ) : (
-                /* AI 消息 — 左对齐，毛玻璃气泡 */
+                /* AI 生成结果 — 左对齐 */
                 <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                   <Avatar size={34} icon={<RobotOutlined />}
                     style={{ background: gradient, flexShrink: 0, boxShadow: `0 3px 10px ${color}40` }} />
@@ -751,7 +580,7 @@ const Chat: React.FC = () => {
                       border: '1px solid rgba(255,255,255,0.65)',
                       wordBreak: 'break-word',
                     }}>
-                      {/* 生成的图片（Imagen / Gemini）— 用 AntImage 渲染，绕过 ReactMarkdown 的大 base64 解析崩溃 */}
+                      {/* 生成的图片 */}
                       {msg.generatedImages && msg.generatedImages.length > 0 && (
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: msg.content ? 12 : 0 }}>
                           {msg.generatedImages.map((imgUrl, idx) => (
@@ -761,37 +590,29 @@ const Chat: React.FC = () => {
                           ))}
                         </div>
                       )}
-                      {/* 生成的视频（Veo）— 用原生 <video> 渲染，src 为带 JWT 的 API URL */}
+                      {/* 生成的视频 */}
                       {msg.generatedVideos && msg.generatedVideos.length > 0 && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: msg.content ? 12 : 0 }}>
                           {msg.generatedVideos.map((videoUrl, idx) => (
                             <video
                               key={idx}
-                              src={videoUrl}        // /api/v1/generate/video/file/{name}?token=xxx
-                              controls             // 显示播放控件
+                              src={videoUrl}
+                              controls
                               style={{
                                 maxWidth: '100%', width: '100%',
                                 borderRadius: 12, display: 'block',
-                                background: '#000',  // 视频未加载时显示黑色背景
+                                background: '#000',
                                 boxShadow: `0 4px 20px ${color}25`,
                               }}
                             />
                           ))}
                         </div>
                       )}
-                      {/* 文字内容（Markdown） */}
+                      {/* 文字内容 */}
                       {msg.content && (
-                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
+                        <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                           {msg.content}
-                        </ReactMarkdown>
-                      )}
-                      {/* 流式输出光标 */}
-                      {streaming && messages[messages.length - 1].id === msg.id && (
-                        <span style={{
-                          display: 'inline-block', width: 2, height: '1em',
-                          background: color, marginLeft: 2, verticalAlign: 'text-bottom',
-                          animation: 'cursorBlink 0.8s infinite',
-                        }} />
+                        </div>
                       )}
                     </div>
                     <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 5, paddingLeft: 2 }}>{msg.time}</div>
@@ -815,25 +636,19 @@ const Chat: React.FC = () => {
                 border: '1px solid rgba(255,255,255,0.65)',
               }}>
                 {chatMode === 'video' ? (
-                  /* 视频模式显示进度提示（生成较慢，需安抚用户） */
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#64748b', fontSize: 13 }}>
                     <Spin size="small" />
                     <span>正在生成视频，Veo 通常需要 1~5 分钟，请耐心等待…</span>
                   </div>
-                ) : chatMode === 'image' ? (
+                ) : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#64748b', fontSize: 13 }}>
                     <Spin size="small" />
                     <span>正在生成图片，请稍候…</span>
                   </div>
-                ) : (
-                  <TypingDots />
                 )}
               </div>
             </div>
           )}
-
-          <style>{`@keyframes cursorBlink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }`}</style>
-          <div ref={messagesEndRef} />
         </div>
       </div>
 
@@ -894,7 +709,6 @@ const Chat: React.FC = () => {
                 borderRadius: 22,
               }}
               options={[
-                { value: 'chat',  label: '对话',    icon: <MessageOutlined /> },
                 { value: 'image', label: '图像生成', icon: <PictureOutlined /> },
                 { value: 'video', label: '视频生成', icon: <VideoCameraOutlined /> },
               ]}
@@ -949,9 +763,7 @@ const Chat: React.FC = () => {
                 icon={<SendOutlined />}
                 onClick={handleSend}
                 loading={loading}
-                disabled={
-                  ((chatMode !== 'chat' ? !input.trim() : (!input.trim() && attachments.length === 0)) || streaming)
-                }
+                disabled={!input.trim() || streaming}
                 style={{
                   flexShrink: 0, borderRadius: 11,
                   background: (input.trim() || attachments.length > 0) && !streaming ? gradient : undefined,

@@ -27,6 +27,7 @@ from app.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.conversation import Conversation, Message
+from app.models.generation import GenerationRecord
 from app.models.model_config import ModelConfig
 from app.models.user import User
 
@@ -196,6 +197,19 @@ async def generate_image(
     image_blocks = "".join(f"[IMAGE_DATA]{url}[/IMAGE_DATA]" for url in images)
     db.add(Message(conversation_id=conv.id, role="assistant",
                    content=image_blocks + (f"\n\n{text}" if text else "")))
+
+    # ── 保存到生成记录（用于 /generate/list 展示） ────────────────────────────
+    for img_url in images:
+        gen = GenerationRecord(
+            user_id=current_user.id,
+            type='image',
+            url=img_url,
+            prompt=body.prompt,
+            model_name=m.name,
+            model_id=str(m.id),
+        )
+        db.add(gen)
+
     db.commit()
 
     return {"code": 200, "message": "success", "data": {
@@ -326,6 +340,19 @@ async def generate_video(
         role="assistant",
         content=f"[VIDEO_FILE]{filename}[/VIDEO_FILE]",
     ))
+
+    # ── 保存到生成记录（用于 /generate/list 展示） ────────────────────────────
+    # 视频 URL 为相对路径，前端通过 /generate/video/file/{filename} 访问
+    gen = GenerationRecord(
+        user_id=current_user.id,
+        type='video',
+        url=filename,
+        prompt=body.prompt,
+        model_name=m.name,
+        model_id=str(m.id),
+    )
+    db.add(gen)
+
     db.commit()
 
     return {"code": 200, "message": "success", "data": {
@@ -378,3 +405,49 @@ async def serve_video_file(
         media_type="video/mp4",
         headers={"Accept-Ranges": "bytes"},  # 明确支持断点续传，让 <video> 能拖动进度
     )
+
+
+# ── 生成记录列表 ────────────────────────────────────────────────────────────────
+
+
+class GenerationRecordResponse(BaseModel):
+    id: str
+    type: str
+    url: str
+    prompt: str
+    model_name: str
+    created_at: str
+
+
+@router.get("/list")
+async def list_generations(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """获取用户的生成记录列表（按创建时间倒序）"""
+    try:
+        records = db.query(GenerationRecord)\
+            .filter(GenerationRecord.user_id == current_user.id)\
+            .order_by(GenerationRecord.created_at.desc())\
+            .all()
+
+        return {
+            "code": 200,
+            "message": "success",
+            "data": [
+                {
+                    "id": str(r.id),
+                    "type": r.type,
+                    "url": r.url,
+                    "prompt": r.prompt,
+                    "model_name": r.model_name,
+                    "created_at": r.created_at.isoformat(),
+                }
+                for r in records
+            ],
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"获取生成记录失败: {str(e)}",
+        )
