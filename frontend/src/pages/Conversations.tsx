@@ -135,7 +135,7 @@ const Conversations: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {availableModels.length > 0 && (
             <Select
-              value={selectedModelId}
+              value={selectedModelId || undefined}
               onChange={(val) => setSelectedModelId(val)}
               disabled={loading || streaming}
               size="small"
@@ -145,6 +145,10 @@ const Conversations: React.FC = () => {
                 value: m.id,
                 label: m.is_default ? `★ ${m.name}` : m.name,
               }))}
+              optionLabelRender={(option) => {
+                const model = availableModels.find(m => m.id === option?.value);
+                return model ? (model.is_default ? `★ ${model.name}` : model.name) : '选择模型';
+              }}
             />
           )}
           <Button
