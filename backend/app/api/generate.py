@@ -419,6 +419,40 @@ class GenerationRecordResponse(BaseModel):
     created_at: str
 
 
+@router.get("/list")
+async def list_generations(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """获取用户的生成记录列表（按创建时间倒序）"""
+    try:
+        records = db.query(GenerationRecord)\
+            .filter(GenerationRecord.user_id == current_user.id)\
+            .order_by(GenerationRecord.created_at.desc())\
+            .all()
+
+        return {
+            "code": 200,
+            "message": "success",
+            "data": [
+                {
+                    "id": str(r.id),
+                    "type": r.type,
+                    "url": r.url,
+                    "prompt": r.prompt,
+                    "model_name": r.model_name,
+                    "created_at": r.created_at.isoformat(),
+                }
+                for r in records
+            ],
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"获取生成记录失败: {str(e)}",
+        )
+
+
 @router.get("/{generation_id}")
 async def get_generation(
     generation_id: str,
@@ -455,40 +489,6 @@ async def get_generation(
         }
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"获取生成记录失败: {str(e)}",
-        )
-
-
-@router.get("/list")
-async def list_generations(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """获取用户的生成记录列表（按创建时间倒序）"""
-    try:
-        records = db.query(GenerationRecord)\
-            .filter(GenerationRecord.user_id == current_user.id)\
-            .order_by(GenerationRecord.created_at.desc())\
-            .all()
-
-        return {
-            "code": 200,
-            "message": "success",
-            "data": [
-                {
-                    "id": str(r.id),
-                    "type": r.type,
-                    "url": r.url,
-                    "prompt": r.prompt,
-                    "model_name": r.model_name,
-                    "created_at": r.created_at.isoformat(),
-                }
-                for r in records
-            ],
-        }
     except Exception as e:
         raise HTTPException(
             status_code=500,
