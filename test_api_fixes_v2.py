@@ -218,11 +218,15 @@ def test_chat_api(token: str):
                     continue
                 line_str = line.decode('utf-8') if isinstance(line, bytes) else line
                 if line_str.startswith("data: "):
+                    data_str = line_str[6:]
+                    if data_str == "[DONE]":
+                        continue
                     try:
-                        event = json.loads(line_str[6:])
+                        event = json.loads(data_str)
                         if event.get("type") == "meta":
                             has_meta = True
-                        elif event.get("type") == "content":
+                        # OpenAI 格式：choices[0].delta.content（不是 type="content"）
+                        elif event.get("choices") and event["choices"][0].get("delta", {}).get("content"):
                             has_content = True
                     except:
                         pass
