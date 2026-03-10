@@ -145,10 +145,6 @@ const Conversations: React.FC = () => {
                 value: m.id,
                 label: m.is_default ? `★ ${m.name}` : m.name,
               }))}
-              optionLabelRender={(option) => {
-                const model = availableModels.find(m => m.id === option?.value);
-                return model ? (model.is_default ? `★ ${model.name}` : model.name) : '选择模型';
-              }}
             />
           )}
           <Button
