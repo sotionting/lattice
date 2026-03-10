@@ -67,12 +67,17 @@ const Generate: React.FC = () => {
 
   // 模式切换时自动选择该模式的默认模型
   useEffect(() => {
-    if (currentModeModels.length > 0 && !activeTab.selectedModelId) {
-      // 优先选择标记为默认的模型，否则选第一个
-      const defaultModel = currentModeModels.find((m) => m.is_default) || currentModeModels[0];
-      updateGenerateTabModelId(activeTab.id, defaultModel.id);
+    if (currentModeModels.length > 0) {
+      // 检查当前选中的模型是否在可用模型列表中
+      const selectedModelStillValid = currentModeModels.some((m) => m.id === activeTab.selectedModelId);
+
+      // 如果没有选模型，或者选中的模型不在当前模式的可用列表中，则自动选择
+      if (!activeTab.selectedModelId || !selectedModelStillValid) {
+        const defaultModel = currentModeModels.find((m) => m.is_default) || currentModeModels[0];
+        updateGenerateTabModelId(activeTab.id, defaultModel.id);
+      }
     }
-  }, [activeTab.mode, currentModeModels.length, currentModeModels, activeTab.id, updateGenerateTabModelId]);
+  }, [activeTab.mode, currentModeModels.length, currentModeModels, activeTab.id, activeTab.selectedModelId, updateGenerateTabModelId]);
 
   // 加载生成记录（当 tab 有 generationId 时）
   useEffect(() => {
