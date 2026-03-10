@@ -3,7 +3,7 @@ import { List, Empty, Button, Spin, Modal, Space } from 'antd';
 import { DeleteOutlined, EditOutlined, FolderOpenOutlined, ReloadOutlined } from '@ant-design/icons';
 import { conversationService } from '@/services/conversation';
 import { useTabStore } from '@/store';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 interface Conversation {
   id: string;
@@ -13,6 +13,7 @@ interface Conversation {
 
 const Histories: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { openChatTab } = useTabStore();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(false);
@@ -23,8 +24,13 @@ const Histories: React.FC = () => {
     conversationService
       .list()
       .then((data) => {
-        // 确保数据是数组
-        setConversations(Array.isArray(data) ? data : []);
+        // 后端返回分页格式 { items, total, page, page_size }
+        // 提取 items 数组，若格式异常则返回空数组
+        if (data && data.items && Array.isArray(data.items)) {
+          setConversations(data.items);
+        } else {
+          setConversations([]);
+        }
       })
       .catch((err) => {
         console.error('加载对话历史失败:', err);
@@ -37,10 +43,10 @@ const Histories: React.FC = () => {
       .finally(() => setLoading(false));
   };
 
-  // 页面每次进入时重新加载
+  // 每次进入这个页面时自动重新加载对话列表
   useEffect(() => {
     loadConversations();
-  }, []);
+  }, [location.pathname]);
 
   // 打开对话（新标签）
   const handleOpen = (id: string, title: string) => {
