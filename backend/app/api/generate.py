@@ -280,26 +280,48 @@ async def _call_veo(m: ModelConfig, prompt: str, image_data: str | None = None) 
         if not poll_data.get("done"):
             continue  # 任务尚未完成，继续等待
 
-        # ── 任务完成，提取视频 base64 数据 ──────────────────────────────
+        # ── 任务完成，提取视频数据（可能是 base64 或 URL） ──────────────────
         try:
-            predictions = poll_data["response"]["predictions"]
-            b64_video = predictions[0]["bytesBase64Encoded"]  # base64 编码的视频内容
-            mime = predictions[0].get("mimeType", "video/mp4")
+            response_data = poll_data.get("response", {})
+
+            # 格式一：新 Veo API 返回 generateVideoResponse.generatedSamples[].video.uri
+            if "generateVideoResponse" in response_data:
+                video_uri = response_data["generateVideoResponse"]["generatedSamples"][0]["video"]["uri"]
+                # 下载视频
+                async with httpx.AsyncClient(timeout=120) as client:
+                    video_resp = await client.get(video_uri)
+                if video_resp.status_code != 200:
+                    raise HTTPException(status_code=502, detail=f"下载 Veo 视频失败: {video_resp.status_code}")
+                video_data = video_resp.content
+                ext = "mp4"  # Veo 通常返回 MP4
+            # 格式二：旧格式返回 predictions[].bytesBase64Encoded
+            elif "predictions" in response_data:
+                predictions = response_data["predictions"]
+                b64_video = predictions[0]["bytesBase64Encoded"]
+                mime = predictions[0].get("mimeType", "video/mp4")
+                video_data = base64.b64decode(b64_video)
+                ext = "webm" if "webm" in mime else "mp4"
+            else:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Veo API 返回格式异常: {str(response_data)[:400]}",
+                )
+        except HTTPException:
+            raise
         except (KeyError, IndexError, TypeError) as e:
             raise HTTPException(
                 status_code=502,
-                detail=f"Veo API 返回格式异常（预期 predictions[0].bytesBase64Encoded）: {str(poll_data)[:400]}",
+                detail=f"Veo API 返回格式异常: {str(poll_data)[:400]}",
             )
 
         # ── 保存到磁盘 ───────────────────────────────────────────────────
         os.makedirs(VIDEO_DIR, exist_ok=True)
         file_id = str(uuid.uuid4())
-        ext = "webm" if "webm" in mime else "mp4"  # 根据 MIME 类型选择扩展名
         filename = f"{file_id}.{ext}"
         filepath = os.path.join(VIDEO_DIR, filename)
 
         with open(filepath, "wb") as f:
-            f.write(base64.b64decode(b64_video))  # base64 解码后写入文件
+            f.write(video_data)
 
         return filename  # 返回文件名，调用方存入 DB 和 response
 
