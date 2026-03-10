@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/authStore'; // 用户认证 store
 import { useTabStore } from '@/store'; // Tab 管理 store
 import { streamChat, type ChatMessage as ApiChatMessage } from '@/services/chat'; // SSE 聊天服务
 import { modelsService, type ActiveModel } from '@/services/models'; // 模型服务
+import { conversationService } from '@/services/conversation'; // 对话服务
 import TabBar from '@/components/common/TabBar'; // 标签栏组件
 import ThinkingChain from '@/components/common/ThinkingChain'; // 思考链组件
 
@@ -93,6 +94,28 @@ const NewChat: React.FC = () => {
       })
       .catch(() => {}); // 失败时静默处理
   }, [activeTab?.id, updateChatTabModelId, activeTab]);
+
+  // ── 副作用：加载历史对话消息 ───────────────────────────────────────────
+
+  // 当打开已有对话（conversationId 存在）且消息列表为空时，加载历史消息
+  useEffect(() => {
+    if (activeTab && activeTab.conversationId && activeTab.messages.length === 0) {
+      conversationService
+        .get(activeTab.conversationId)
+        .then((detail) => {
+          // 转换后端消息格式为前端格式
+          const messages = detail.messages.map((m, idx) => ({
+            id: `msg-${idx}`,
+            role: m.role as 'user' | 'assistant',
+            content: m.content,
+            time: new Date(m.created_at).toLocaleTimeString('zh-CN'),
+          }));
+          // 更新 tab 的消息列表
+          updateChatTabMessages(activeTab.id, messages);
+        })
+        .catch(() => {}); // 加载失败时静默处理
+    }
+  }, [activeTab?.conversationId, activeTab?.id, activeTab?.messages.length, updateChatTabMessages]);
 
   // ── 副作用：自动滚动到消息末尾 ────────────────────────────────────────
 
