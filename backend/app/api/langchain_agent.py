@@ -122,8 +122,15 @@ def _run_agent_sync(
 
     如果 conversation_history 非空，会附加在系统提示词中以维护上下文。
     """
-    from langchain.agents import create_tool_calling_agent, AgentExecutor
-    from langchain_core.prompts import ChatPromptTemplate
+    try:
+        from langchain.agents import create_tool_calling_agent, AgentExecutor
+        from langchain_core.prompts import ChatPromptTemplate
+    except ImportError as e:
+        raise ImportError(
+            f"LangChain 依赖缺失或版本不兼容: {str(e)}\n"
+            f"请确保已安装: langchain>=0.3.0, langchain-core>=0.2.0\n"
+            f"运行命令: pip install -U langchain langchain-core"
+        )
 
     # 构建系统提示词：包含对话历史上下文（若有）
     system_prompt = (

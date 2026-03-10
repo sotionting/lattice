@@ -30,6 +30,7 @@ bcrypt==4.1.2
 openai==1.12.0
 anthropic==0.18.1
 langchain>=0.3.0              # LangChain 核心框架（0.3+ 支持 Tool Calling）
+langchain-core>=0.2.0         # LangChain 核心库（含 BaseLanguageModel、Tool 等）
 langchain-openai>=0.2.0       # OpenAI / 兼容 API 接入
 langchain-google-genai>=2.0.0 # Google Gemini 接入
 langchain-community>=0.3.0    # 社区工具包（FileManagementToolkit 等）
