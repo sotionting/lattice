@@ -12,10 +12,6 @@ LLM 工厂：提供两种方式创建 LangChain LLM 实例。
 方式 B（开发/测试）：build_llm_from_yaml(cfg)
   从合并后的 YAML 配置字典构建（langchain_config.yaml + agents_config.yaml）。
 """
-import os
-from dotenv import load_dotenv
-
-load_dotenv()  # 从项目根目录 .env 加载环境变量
 
 # 各 provider 对应的默认 API 地址（ModelConfig.base_url 留空时使用）
 _PROVIDER_BASE_URLS = {
@@ -85,12 +81,12 @@ def build_llm_from_yaml(cfg: dict):
         return ChatGoogleGenerativeAI(
             model=model,
             temperature=temperature,
-            google_api_key=api_key or os.getenv("GOOGLE_API_KEY", ""),
+            google_api_key=api_key,
         )
 
     if provider in ("openai", "custom", "doubao"):
         from langchain_openai import ChatOpenAI
-        key = api_key or os.getenv("OPENAI_API_KEY", "")
+        key = api_key
         base_url = llm_cfg.get("base_url") or _PROVIDER_BASE_URLS.get(provider, "")
         kwargs: dict = dict(model=model, temperature=temperature, api_key=key)
         if base_url:

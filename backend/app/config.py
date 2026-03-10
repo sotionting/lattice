@@ -37,16 +37,7 @@ class Settings(BaseSettings):
     # CORS配置
     CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:3000"]
 
-    # Agent API配置
-    OPENAI_API_KEY: str = ""
-    ANTHROPIC_API_KEY: str = ""
-    
-    # 小米 MiMo API配置
-    MIMO_API_URL: str = "http://localhost:8080"  # MiMo2API 服务地址，或直接使用小米 MiMo API
-    MIMO_API_KEY: str = ""  # API Key（如果使用 MiMo2API，默认是 sk-default）
-    MIMO_MODEL: str = "mimo-v2-flash-studio"  # 默认模型
-    MIMO_AUTH_TOKEN: str = ""  # 小米 MiMo 认证 Token（从浏览器开发者工具获取）
-    MIMO_COOKIE: str = ""  # 小米 MiMo Cookie（如果需要直接调用）
+    # AI 模型 API Key 统一在「模型 API 管理」页面配置到数据库，不在此处硬编码
 
     # 任务配置
     TASK_TIMEOUT: int = 1800  # 30分钟
