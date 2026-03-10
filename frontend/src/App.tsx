@@ -17,15 +17,7 @@ const App: React.FC = () => {
   if (!initialized) {
     return (
       <ConfigProvider locale={zhCN}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          height: '100vh',
-          background: '#f5f5f5',
-        }}>
-          <Spin size="large" tip="加载中..." fullscreen={false} />
-        </div>
+        <Spin size="large" tip="加载中..." fullscreen />
       </ConfigProvider>
     );
   }
