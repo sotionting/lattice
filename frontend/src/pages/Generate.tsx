@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Button, Select, Spin, Modal, Avatar, Segmented, Space, message } from 'antd';
-import { SendOutlined, RobotOutlined, ClearOutlined, PictureOutlined, PlusOutlined } from '@ant-design/icons';
+import { Button, Select, Spin, Modal, Avatar, Segmented, Space, message, Image as AntImage } from 'antd';
+import { SendOutlined, RobotOutlined, ClearOutlined, PictureOutlined, PlusOutlined, PaperClipOutlined, CloseCircleFilled } from '@ant-design/icons';
 import { useAuthStore, useTabStore } from '@/store';
 import { generateImage, getGeneration } from '@/services/generate'; // 图片生成服务
 import { modelsService, type ActiveModel } from '@/services/models';
@@ -35,6 +35,8 @@ const Generate: React.FC = () => {
   const [availableModels, setAvailableModels] = useState<ActiveModel[]>([]);
   const [imageModels, setImageModels] = useState<ActiveModel[]>([]);
   const [videoModels, setVideoModels] = useState<ActiveModel[]>([]);
+  const [referenceImage, setReferenceImage] = useState<string | undefined>(undefined);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const activeTab = useMemo(() => {
     return generateTabs.find((t) => t.id === activeGenerateTabId);
@@ -109,7 +111,7 @@ const Generate: React.FC = () => {
     updateGenerateTabLoading(activeTab.id, true);
 
     try {
-      const result = await generateImage(prompt, activeTab.selectedModelId);
+      const result = await generateImage(prompt, activeTab.selectedModelId, referenceImage);
       updateGenerateTabResult(activeTab.id, result.images);
       message.success('生成成功');
     } catch (err: any) {
@@ -121,7 +123,30 @@ const Generate: React.FC = () => {
     } finally {
       updateGenerateTabLoading(activeTab.id, false);
     }
-  }, [activeTab, updateGenerateTabLoading, updateGenerateTabResult]);
+  }, [activeTab, updateGenerateTabLoading, updateGenerateTabResult, referenceImage]);
+
+  // 处理文件选择
+  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (files.length === 0) return;
+
+    const file = files[0];
+    if (!file.type.startsWith('image/')) {
+      message.error('请选择图片文件');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setReferenceImage(ev.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  const clearReferenceImage = useCallback(() => {
+    setReferenceImage(undefined);
+  }, []);
 
   const handleTabClick = (tabId: string) => {
     setActiveGenerateTab(tabId);
@@ -138,6 +163,7 @@ const Generate: React.FC = () => {
   const handleClear = () => {
     updateGenerateTabPrompt(activeTab.id, '');
     updateGenerateTabResult(activeTab.id, undefined, undefined);
+    clearReferenceImage();
   };
 
   return (
@@ -195,6 +221,31 @@ const Generate: React.FC = () => {
                 label: m.name,
               })) : []}
             />
+          </div>
+
+          {/* 参考图上传 */}
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', marginBottom: 8 }}>参考图（可选）</div>
+            {referenceImage ? (
+              <div style={{ position: 'relative', display: 'inline-block', marginBottom: 12 }}>
+                <AntImage src={referenceImage} alt="Reference" width={56} height={56}
+                  style={{ objectFit: 'cover', borderRadius: 9, border: '1px solid rgba(0,0,0,0.06)', display: 'block' }}
+                  preview={{ mask: '预览' }} />
+                <CloseCircleFilled
+                  style={{ position: 'absolute', top: -5, right: -5, color: '#ef4444', fontSize: 15, cursor: 'pointer', background: '#fff', borderRadius: '50%' }}
+                  onClick={clearReferenceImage}
+                />
+              </div>
+            ) : (
+              <Button
+                icon={<PaperClipOutlined />}
+                onClick={() => fileInputRef.current?.click()}
+                style={{ width: '100%', marginBottom: 12 }}
+              >
+                上传参考图
+              </Button>
+            )}
+            <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFileSelect} />
           </div>
 
           {/* 提示词输入 */}
