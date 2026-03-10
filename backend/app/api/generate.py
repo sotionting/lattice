@@ -26,7 +26,6 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.models.conversation import Conversation, Message
 from app.models.generation import GenerationRecord
 from app.models.model_config import ModelConfig
 from app.models.user import User
@@ -186,19 +185,7 @@ async def generate_image(
     if not images:
         raise HTTPException(status_code=502, detail="图片生成失败，API 未返回图片数据")
 
-    # ── 保存对话记录，方便在历史对话页回顾 ────────────────────────────────
-    title = body.prompt[:50]
-    conv = Conversation(user_id=current_user.id, title=title, model_id=m.model_id)
-    db.add(conv)
-    db.flush()  # 提前获取 conv.id
-
-    db.add(Message(conversation_id=conv.id, role="user", content=body.prompt))
-    # 每张图片用 [IMAGE_DATA]...[/IMAGE_DATA] 包裹；前端解析时还原为 generatedImages 直接渲染
-    image_blocks = "".join(f"[IMAGE_DATA]{url}[/IMAGE_DATA]" for url in images)
-    db.add(Message(conversation_id=conv.id, role="assistant",
-                   content=image_blocks + (f"\n\n{text}" if text else "")))
-
-    # ── 保存到生成记录（用于 /generate/list 展示） ────────────────────────────
+    # ── 保存到生成记录（生成的内容不进入对话，只保存到生成记录表） ──────────
     for img_url in images:
         gen = GenerationRecord(
             user_id=current_user.id,
@@ -215,7 +202,6 @@ async def generate_image(
     return {"code": 200, "message": "success", "data": {
         "images": images,
         "text": text,
-        "conversation_id": str(conv.id),
     }}
 
 
@@ -349,21 +335,7 @@ async def generate_video(
     # 调用 Veo API，内部完成提交 + 轮询 + 文件保存
     filename = await _call_veo(m, body.prompt, body.image_data)
 
-    # ── 保存对话记录 ─────────────────────────────────────────────────────────
-    title = body.prompt[:50]
-    conv = Conversation(user_id=current_user.id, title=title, model_id=m.model_id)
-    db.add(conv)
-    db.flush()
-
-    db.add(Message(conversation_id=conv.id, role="user", content=body.prompt))
-    # [VIDEO_FILE]...[/VIDEO_FILE] 标记：前端解析后通过 /generate/video/file/ 端点访问
-    db.add(Message(
-        conversation_id=conv.id,
-        role="assistant",
-        content=f"[VIDEO_FILE]{filename}[/VIDEO_FILE]",
-    ))
-
-    # ── 保存到生成记录（用于 /generate/list 展示） ────────────────────────────
+    # ── 保存到生成记录（生成的内容不进入对话，只保存到生成记录表） ──────────
     # 视频 URL 为相对路径，前端通过 /generate/video/file/{filename} 访问
     gen = GenerationRecord(
         user_id=current_user.id,
@@ -379,7 +351,6 @@ async def generate_video(
 
     return {"code": 200, "message": "success", "data": {
         "video_filename": filename,           # 前端用此文件名构造访问 URL
-        "conversation_id": str(conv.id),      # 更新浏览器 URL，让历史页能找到这条记录
     }}
 
 
