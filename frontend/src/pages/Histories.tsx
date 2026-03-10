@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Fragment } from 'react';
 import { List, Empty, Button, Spin, Modal, Space } from 'antd';
 import { DeleteOutlined, EditOutlined, FolderOpenOutlined, ReloadOutlined } from '@ant-design/icons';
 import { conversationService } from '@/services/conversation';
@@ -9,6 +9,8 @@ interface Conversation {
   id: string;
   title: string;
   created_at: string;
+  last_message?: string | null;
+  message_count?: number;
 }
 
 const Histories: React.FC = () => {
@@ -111,7 +113,16 @@ const Histories: React.FC = () => {
                 >
                   <List.Item.Meta
                     title={conv.title}
-                    description={new Date(conv.created_at).toLocaleString()}
+                    description={
+                      <>
+                        <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>
+                          {conv.last_message ? conv.last_message : '暂无内容'}
+                        </div>
+                        <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                          {new Date(conv.created_at).toLocaleString()} · {conv.message_count || 0} 条消息
+                        </div>
+                      </>
+                    }
                   />
                 </List.Item>
               )}

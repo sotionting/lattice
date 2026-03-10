@@ -12,10 +12,13 @@ export interface User {
 // ── 对话 ──────────────────────────────────────────────────────────────────
 export interface Conversation {
   id: string;
-  user_id: string;
+  user_id?: string;
   title: string;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
+  last_message?: string | null;  // 最后一条消息内容摘要
+  message_count?: number;        // 对话消息总数
+  model_id?: string | null;      // 使用的模型 ID
 }
 
 export interface Message {
