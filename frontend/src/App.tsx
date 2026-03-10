@@ -24,7 +24,7 @@ const App: React.FC = () => {
           height: '100vh',
           background: '#f5f5f5',
         }}>
-          <Spin size="large" tip="加载中..." />
+          <Spin size="large" tip="加载中..." fullscreen={false} />
         </div>
       </ConfigProvider>
     );
