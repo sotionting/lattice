@@ -1,0 +1,17 @@
+# LangChain LLM 配置
+# API Key 建议写入根目录 .env，不要直接填在这里
+language: zh-CN
+
+llm:
+  provider: google             # google | openai | local
+  model: gemini-2.5-flash      # Google 推荐；OpenAI 用 gpt-4o-mini；本地用 qwen2.5
+  api_key: ""                  # 留空则自动从 .env 读取 GOOGLE_API_KEY / OPENAI_API_KEY
+  temperature: 0.2
+
+# 代理（优先级：.env HTTPS_PROXY > 此处 > 系统环境变量）
+proxy:
+  url: ""                      # 例如 "http://127.0.0.1:7890"，或留空
+
+chain:
+  max_tokens: 1024
+  timeout: 30

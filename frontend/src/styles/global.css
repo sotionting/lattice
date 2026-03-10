@@ -1,0 +1,145 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
+@import './variables.css';
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  height: 100%;
+}
+
+body {
+  height: 100%;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: var(--text-color);
+  /* Soft multi-stop gradient — the base layer for glassmorphism */
+  background: linear-gradient(135deg, #f0f4ff 0%, #e8eeff 20%, #f3eeff 50%, #ffeef8 78%, #fff0f0 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Ambient glow blob — top-left violet */
+body::before {
+  content: '';
+  position: fixed;
+  top: -220px;
+  left: -180px;
+  width: 760px;
+  height: 760px;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.22) 0%, transparent 68%);
+  pointer-events: none;
+  z-index: 0;
+  animation: ambientBlob1 24s ease-in-out infinite alternate;
+}
+
+/* Ambient glow blob — bottom-right rose */
+body::after {
+  content: '';
+  position: fixed;
+  bottom: -180px;
+  right: -120px;
+  width: 680px;
+  height: 680px;
+  background: radial-gradient(circle, rgba(236, 72, 153, 0.17) 0%, transparent 68%);
+  pointer-events: none;
+  z-index: 0;
+  animation: ambientBlob2 30s ease-in-out infinite alternate;
+}
+
+@keyframes ambientBlob1 {
+  0%   { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(90px, 110px) scale(1.14); }
+}
+
+@keyframes ambientBlob2 {
+  0%   { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(-90px, -70px) scale(1.12); }
+}
+
+#root {
+  height: 100%;
+  position: relative;
+  z-index: 1;
+}
+
+/* Make Ant Design Layout transparent so body gradient shows through */
+.ant-layout {
+  background: transparent !important;
+}
+.ant-layout-content {
+  background: transparent !important;
+}
+
+a {
+  color: var(--primary-color);
+  text-decoration: none;
+}
+
+/* ── Custom scrollbar ──────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.28);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.48);
+}
+
+/* ── Utility: frosted glass card ───────────────────────────────── */
+.glass-card {
+  background: var(--glass-white);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow-glass);
+}
+
+/* ── Page layout helpers ───────────────────────────────────────── */
+.page-container {
+  padding: 24px;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.page-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+/* Glassmorphism card — replaces plain white cards */
+.card {
+  background: var(--glass-white);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow-glass);
+  padding: 24px;
+}
+
+/* ── Status color helpers ──────────────────────────────────────── */
+.status-active    { color: var(--success-color); }
+.status-inactive  { color: var(--text-disabled); }
+.status-error     { color: var(--error-color); }
+.status-pending   { color: var(--warning-color); }
+.status-running   { color: var(--primary-color); }
+.status-completed { color: var(--success-color); }
+.status-failed    { color: var(--error-color); }

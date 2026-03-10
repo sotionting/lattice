@@ -1,0 +1,69 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+dist/
+.vite/
+
+# IDE
+.vscode/
+.idea/
+.claude/
+*.swp
+*.swo
+*~
+
+# Environment - never commit real credentials
+.env
+.env.local
+.env.production
+.env.staging
+**/.env
+**/.env.local
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Coverage
+.coverage
+htmlcov/
+*.cover
+
+# Test
+.pytest_cache/
+.tox/
+
+# Docker
+*.pid
+*.seed
+*.pid.lock
+celerybeat-schedule
+celerybeat-schedule.*
+
+# Agent 子项目（独立 git 仓库，单独管理）
+Agent/

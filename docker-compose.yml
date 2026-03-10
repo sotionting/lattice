@@ -1,0 +1,116 @@
+services:
+  # PostgreSQL数据库
+  postgres:
+    image: postgres:15-alpine
+    container_name: agent_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: agent_system
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - agent_network
+
+  # Redis缓存和消息队列
+  redis:
+    image: redis:7-alpine
+    container_name: agent_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - agent_network
+
+  # 后端API
+  backend:
+    build: ./backend
+    container_name: agent_backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - agent_network
+
+  # Celery Worker
+  celery_worker:
+    build: ./backend
+    container_name: agent_celery_worker
+    command: celery -A app.tasks.celery_app worker --loglevel=info
+    volumes:
+      - ./backend:/app
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - agent_network
+
+  # Celery Beat (定时任务)
+  celery_beat:
+    build: ./backend
+    container_name: agent_celery_beat
+    command: celery -A app.tasks.celery_app beat --loglevel=info
+    volumes:
+      - ./backend:/app
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    networks:
+      - agent_network
+
+  # 前端
+  frontend:
+    build: ./frontend
+    container_name: agent_frontend
+    # npm install 在容器启动时运行，确保在 Linux glibc 环境中安装正确的 rollup 原生二进制
+    # --no-package-lock：忽略 Windows 生成的 package-lock.json（只记录了 win32 binary），
+    #   强制 npm 按当前 Linux 平台重新解析并安装 @rollup/rollup-linux-x64-gnu
+    command: sh -c "npm install --no-package-lock && npm run dev -- --host 0.0.0.0"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules  # 命名 volume，持久化 Linux 原生依赖，重建时用 docker volume rm soiton2026_frontend_node_modules 清空
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000
+    depends_on:
+      - backend
+    networks:
+      - agent_network
+
+  # Nginx反向代理
+  nginx:
+    image: nginx:alpine
+    container_name: agent_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - agent_network
+
+volumes:
+  postgres_data:
+  redis_data:
+  frontend_node_modules:  # 前端 node_modules 命名 volume，重建时用 docker volume rm soiton2026_frontend_node_modules 清空
+
+networks:
+  agent_network:
+    driver: bridge

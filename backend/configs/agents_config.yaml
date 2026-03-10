@@ -1,0 +1,26 @@
+# Agent 专项配置
+agents:
+  chat:
+    memory_type: buffer          # buffer | summary | none
+    max_history: 20
+    system_prompt: "你是一个有帮助的中文助手。"
+
+  search:
+    tools:
+      - calculator
+      - web_search
+    max_iterations: 5
+    verbose: false
+
+  repl:
+    max_iterations: 8
+    verbose: false               # true 可在日志中看到代码执行过程
+
+  csv:
+    max_iterations: 8
+    verbose: false
+
+  file:
+    root_dir: "/app/uploads"     # 文件操作的根目录（Docker 容器内路径）
+    max_iterations: 8
+    verbose: false
