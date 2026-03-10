@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { List, Empty, Button, Spin, Modal } from 'antd';
-import { DeleteOutlined, EditOutlined, FolderOpenOutlined } from '@ant-design/icons';
+import { List, Empty, Button, Spin, Modal, Space } from 'antd';
+import { DeleteOutlined, EditOutlined, FolderOpenOutlined, ReloadOutlined } from '@ant-design/icons';
 import { conversationService } from '@/services/conversation';
 import { useTabStore } from '@/store';
 import { useNavigate } from 'react-router-dom';
@@ -18,7 +18,7 @@ const Histories: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   // 加载对话列表
-  useEffect(() => {
+  const loadConversations = () => {
     setLoading(true);
     conversationService
       .list()
@@ -35,6 +35,11 @@ const Histories: React.FC = () => {
         });
       })
       .finally(() => setLoading(false));
+  };
+
+  // 页面每次进入时重新加载
+  useEffect(() => {
+    loadConversations();
   }, []);
 
   // 打开对话（新标签）
@@ -64,7 +69,12 @@ const Histories: React.FC = () => {
   return (
     <div style={{ height: '100%', overflowY: 'auto', padding: '24px' }}>
       <div style={{ maxWidth: 600, margin: '0 auto' }}>
-        <h2 style={{ marginBottom: 24 }}>对话历史</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+          <h2 style={{ margin: 0 }}>对话历史</h2>
+          <Button icon={<ReloadOutlined />} onClick={loadConversations} loading={loading}>
+            刷新
+          </Button>
+        </div>
 
         <Spin spinning={loading}>
           {conversations.length === 0 ? (

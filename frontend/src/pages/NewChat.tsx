@@ -44,6 +44,7 @@ const NewChat: React.FC = () => {
     updateChatTabStreaming,
     updateChatTabInput,
     updateChatTabModelId,
+    updateChatTabConversationId,
   } = useTabStore();
 
   // 用户认证状态
@@ -133,7 +134,15 @@ const NewChat: React.FC = () => {
 
     try {
       // 调用 SSE 流式聊天服务
-      const stream = streamChat(apiMessages, undefined, undefined, activeTab.selectedModelId);
+      const stream = streamChat(
+        apiMessages,
+        activeTab.conversationId,
+        (conversationId) => {
+          // 后端返回 conversation_id，保存到 tab
+          updateChatTabConversationId(activeTab.id, conversationId);
+        },
+        activeTab.selectedModelId
+      );
       let firstToken = true;
 
       // 迭代 SSE 流，逐个处理 token
