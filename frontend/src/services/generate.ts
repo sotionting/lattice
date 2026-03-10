@@ -89,3 +89,11 @@ export async function listGenerations(): Promise<GenerationRecord[]> {
   const res = await api.get<{ code: number; data: GenerationRecord[] }>('/generate/list');
   return res.data.data;
 }
+
+/**
+ * 获取单个生成记录详情
+ */
+export async function getGeneration(generationId: string): Promise<GenerationRecord> {
+  const res = await api.get<{ code: number; data: GenerationRecord }>(`/generate/${generationId}`);
+  return res.data.data;
+}

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { Button, Select, Spin, Modal, Avatar, Segmented, Space, message } from 'antd';
 import { SendOutlined, RobotOutlined, ClearOutlined, PictureOutlined, PlusOutlined } from '@ant-design/icons';
 import { useAuthStore, useTabStore } from '@/store';
-import { generateImage } from '@/services/generate'; // 图片生成服务
+import { generateImage, getGeneration } from '@/services/generate'; // 图片生成服务
 import { modelsService, type ActiveModel } from '@/services/models';
 import TabBar from '@/components/common/TabBar';
 
@@ -71,6 +71,32 @@ const Generate: React.FC = () => {
       updateGenerateTabModelId(activeTab.id, defaultModel.id);
     }
   }, [activeTab.mode, currentModeModels.length, currentModeModels, activeTab.id, updateGenerateTabModelId]);
+
+  // 加载生成记录（当 tab 有 generationId 时）
+  useEffect(() => {
+    if (activeTab?.generationId && !activeTab.prompt) {
+      getGeneration(activeTab.generationId)
+        .then((gen) => {
+          updateGenerateTabPrompt(activeTab.id, gen.prompt);
+          updateGenerateTabMode(activeTab.id, gen.type);
+          // 如果生成记录有 URL，加载为结果
+          if (gen.url) {
+            if (gen.type === 'image') {
+              updateGenerateTabResult(activeTab.id, [gen.url], undefined);
+            } else {
+              updateGenerateTabResult(activeTab.id, undefined, [gen.url]);
+            }
+          }
+        })
+        .catch((err) => {
+          Modal.error({
+            title: '加载生成记录失败',
+            content: err.message || '无法加载该生成记录',
+            okText: '关闭',
+          });
+        });
+    }
+  }, [activeTab?.generationId, activeTab?.id, activeTab?.prompt, updateGenerateTabPrompt, updateGenerateTabMode, updateGenerateTabResult]);
 
   // 发送生成请求
   const handleGenerate = useCallback(async () => {

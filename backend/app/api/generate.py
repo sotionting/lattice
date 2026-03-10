@@ -419,6 +419,49 @@ class GenerationRecordResponse(BaseModel):
     created_at: str
 
 
+@router.get("/{generation_id}")
+async def get_generation(
+    generation_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """获取单个生成记录详情"""
+    try:
+        record = db.query(GenerationRecord)\
+            .filter(
+                GenerationRecord.id == generation_id,
+                GenerationRecord.user_id == current_user.id,
+            )\
+            .first()
+
+        if not record:
+            raise HTTPException(
+                status_code=404,
+                detail="生成记录不存在或无访问权限",
+            )
+
+        return {
+            "code": 200,
+            "message": "success",
+            "data": {
+                "id": str(record.id),
+                "type": record.type,
+                "url": record.url,
+                "prompt": record.prompt,
+                "model_name": record.model_name,
+                "model_id": record.model_id,
+                "created_at": record.created_at.isoformat(),
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"获取生成记录失败: {str(e)}",
+        )
+
+
 @router.get("/list")
 async def list_generations(
     db: Session = Depends(get_db),
