@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     """应用配置类"""
 
     # 项目信息
-    PROJECT_NAME: str = "AI Agent 对话平台"
+    PROJECT_NAME: str = "Lattice"
     VERSION: str = "1.0.0"
     API_V1_PREFIX: str = "/api/v1"
 

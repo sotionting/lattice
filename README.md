@@ -1,4 +1,4 @@
-# AI Agent 对话平台
+# Lattice
 
 一个以对话为核心交互界面的 AI Agent 平台。用户通过聊天与 Agent 交互，Agent 在后端调用各类 Skill 完成任务（视频生成、网页爬取、代码执行等）。管理员可在后台管理模型 API、Skill、MCP 服务器、用户额度等资源。
 
