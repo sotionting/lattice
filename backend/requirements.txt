@@ -27,15 +27,15 @@ python-multipart==0.0.6
 bcrypt==4.1.2
 
 # Agent Libraries
-openai>=1.40.0                # Updated for langchain-openai compatibility
+openai==1.51.0                # OpenAI API 客户端
 anthropic==0.18.1
-langchain>=0.3.0              # LangChain 核心框架（0.3+ 支持 Tool Calling）
-langchain-core>=0.3.0         # Updated for langchain 0.3.0 compatibility
-langchain-openai>=0.2.0       # OpenAI / 兼容 API 接入
-langchain-google-genai>=2.0.0 # Google Gemini 接入
-langchain-community>=0.3.0    # 社区工具包（FileManagementToolkit 等）
-langchain-experimental>=0.3.0 # 实验性功能（PythonREPLTool、PandasDataframeAgent）
-google-generativeai>=0.8.0    # Google Gemini 底层 SDK
+langchain==0.2.17             # 稳定版本，避免 0.3.x 复杂依赖
+langchain-core==0.2.43        # 与 langchain 0.2.17 兼容（最低 0.2.43）
+langchain-openai==0.1.21      # OpenAI 集成，与 0.2.x 兼容
+langchain-google-genai==1.0.10 # Google Gemini 接入（与 langchain 0.2.x 兼容）
+langchain-community==0.2.18   # 社区集成
+langchain-experimental==0.0.61 # 实验特性
+google-generativeai==0.7.2    # Google Gemini 底层 SDK（与 langchain-google-genai 1.0.10 兼容）
 pandas>=2.0.0                 # CSV 数据分析（CsvAgent 依赖）
 duckduckgo-search>=6.0.0      # 免费网络搜索工具（无需 API Key）
 pyyaml>=6.0                   # 读取 YAML 配置文件
