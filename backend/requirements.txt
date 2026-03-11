@@ -1,7 +1,7 @@
 # FastAPI
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
-pydantic==2.6.0
+pydantic>=2.7.4    # Updated for langchain 0.3.0 compatibility
 pydantic-settings==2.1.0
 
 # Database
@@ -27,10 +27,10 @@ python-multipart==0.0.6
 bcrypt==4.1.2
 
 # Agent Libraries
-openai==1.12.0
+openai>=1.40.0                # Updated for langchain-openai compatibility
 anthropic==0.18.1
 langchain>=0.3.0              # LangChain 核心框架（0.3+ 支持 Tool Calling）
-langchain-core>=0.2.0         # LangChain 核心库（含 BaseLanguageModel、Tool 等）
+langchain-core>=0.3.0         # Updated for langchain 0.3.0 compatibility
 langchain-openai>=0.2.0       # OpenAI / 兼容 API 接入
 langchain-google-genai>=2.0.0 # Google Gemini 接入
 langchain-community>=0.3.0    # 社区工具包（FileManagementToolkit 等）

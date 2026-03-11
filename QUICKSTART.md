@@ -26,12 +26,33 @@
 
 ## 三、当前开发状态（实时更新）
 
+### ⏳ 当前任务
+- **Docker 镜像重建中**：更新 requirements.txt 依赖版本（pydantic 2.7.4+, langchain-core 0.3.0+, openai 1.40.0+）以兼容 LangChain 0.3.0
+- 预期完成时间：此任务完成后，需要重启 backend 容器并测试 Agent API
+
 ### ✅ 已完成
 - 7 个 Docker 容器全部运行（postgres / redis / backend / celery_worker / celery_beat / frontend / nginx）
 - 数据库已初始化（alembic upgrade head 已运行），管理员账号通过 ADMIN_PASSWORD 环境变量创建（不再有默认密码）
 - 后端真实 JWT 认证（登录验 DB、bcrypt 密码、jose 签 token）
 - 用户管理 CRUD 完整实现（前端表格 + 后端 API）
 - 登录正常（Vite proxy 已修复，改用 host.docker.internal:8000）
+- **Spring Boot 风格的实时日志系统（v3.1 · 2026-03-11）：**
+  - 实现 `backend/app/core/logging.py`：彩色日志格式化器，支持 DEBUG/INFO/WARNING/ERROR 级别
+  - 实现 `backend/app/core/middleware.py`：请求/响应日志中间件，显示请求 ID、执行时间、IP 地址、状态码颜色编码
+  - 启动信息美化：项目名/API 文档 URL/Debug 模式/数据库连接/Redis 状态
+  - 创建 `LOGGING_GUIDE.md`：详细使用指南与最佳实践
+  - 验证：所有测试脚本成功显示彩色日志输出
+- **模型配置导入完成（v3.1 · 2026-03-11）：**
+  - 创建 `backend/scripts/import_model_configs.py`：从 SQL 备份文件导入 4 个模型配置
+  - 创建 `backend/scripts/test_model_configs.py`：8 个数据库验证测试（全部通过）
+  - 创建 `backend/scripts/test_model_api.py`：API 集成测试
+  - 导入模型：mimo-v2-flash / gemini-3-flash-preview / nano-banana-pro / veo-3.1-generate-preview
+- **LangChain 依赖版本修复（v3.1 · 2026-03-11）：**
+  - 修复 `requirements.txt`：
+    - pydantic: 2.6.0 → >=2.7.4（LangChain 0.3.0 requirement）
+    - langchain-core: >=0.2.0 → >=0.3.0（LangChain 0.3.0 compatibility）
+    - openai: 1.12.0 → >=1.40.0（langchain-openai compatibility）
+  - 这些修改修复了 Agent API 的 500 错误（缺失 langchain_google_genai 模块）
 - **前端全页面美化完成（v1.9 · 2026-03-02）：**
   - 登录页：深色渐变背景、圆角卡片、机器人 Logo
   - Chat 页：自动滚动、消息时间戳、三点 loading 动画、新建/清空对话
@@ -170,10 +191,12 @@
 - **个人 GitHub 主页 README 恢复**：force push 误覆盖后从 git object 还原
 
 ### ⏳ 待实现
+- ⏳ **Agent API 验证**：待 Docker 重建完成，重启 backend 容器并运行 test_agent_api.py 验证修复
+- Agent 多标签对话：NewChat / Generate / Histories / Generations 页面实现（已有基础设计）
 - MCP 管理后端（MCPServer 数据模型 + 连通测试 API）
 - 额度管理后端（UsageRecord 表 + 用量记录写入 API）
 - 用量记录：chat.py 对话结束后写入 UsageRecord（token 计费）
-- Agent 页面前端：模型选择下拉 + Agent 类型切换 + 对话界面
+- 视频生成 API 后端接入
 
 ---
 
@@ -276,10 +299,81 @@
 
 ---
 
-## 六、已知问题 / 踩过的坑（每次操作前对照检查，不允许重复踩坑）
+## 六、Git 和数据库备份规则（强制执行）
+
+### Git 提交规则
+
+**每次更新代码或 MD 文件后，必须提交到 git：**
+
+```bash
+# 第一步：查看改动
+git status
+git diff
+
+# 第二步：暂存所有改动
+git add .
+
+# 第三步：创建提交（中文消息）
+git commit -m "feat/fix: 改动说明（中文）"
+
+# 第四步：推送到远端
+git push origin main
+```
+
+**提交消息格式：**
+- `feat: 新增功能描述` — 添加新功能
+- `fix: bug 修复描述` — 修复 bug
+- `chore: 维护任务描述` — 清理、配置等无业务影响的改动
+- `docs: 文档更新描述` — 仅更新 MD 文件
+
+**强制规则：**
+- ❌ **不得硬编码 API Key、密码、JWT secret 到代码**（.gitignore 已排除 .env 和 .claude）
+- ✅ **必须在提交前检查 `.env` 文件**：`git diff --cached` 中不应出现敏感信息
+- ✅ **push 前再验证一次**：`git log --oneline -3` 确认历史正确
+
+### 数据库备份规则
+
+**每次修改 schema（新表、新列、迁移）后，必须备份数据库到根目录：**
+
+```bash
+# 自动备份脚本（已在根目录）
+bash backup_database.sh
+
+# 脚本会生成：database_backups/postgres_backup_YYYYMMDD_HHMMSS.sql
+# 并自动覆盖根目录 backup_latest.sql（最新备份）
+```
+
+**备份时机：**
+1. 运行 `alembic upgrade head` 后
+2. 修改 model 文件（新表/新字段）后
+3. 导入生产数据后
+4. 每个开发会话结束时
+
+**恢复备份：**
+```bash
+# 恢复到最新备份
+bash restore_database.sh backup_latest.sql
+
+# 恢复到指定备份
+bash restore_database.sh database_backups/postgres_backup_20260311_022621.sql
+```
+
+**备份验证：**
+```bash
+# 查看备份文件大小和时间
+ls -lh database_backups/ backup_latest.sql
+
+# 验证备份完整性（检查是否含 CREATE TABLE）
+head -50 backup_latest.sql | grep -i "CREATE TABLE"
+```
+
+---
+
+## 七、已知问题 / 踩过的坑（每次操作前对照检查，不允许重复踩坑）
 
 | 问题 | 已知原因 | 已知解法 |
 |---|---|---|
+| Agent API 500：No module named 'langchain_google_genai' | LangChain 依赖版本冲突：pydantic<2.7.4、langchain-core<0.3.0、openai<1.40.0 | 已修复：更新 requirements.txt 中三个依赖到兼容版本，重建 Docker 镜像 |
 | frontend rollup SyntaxError | Windows lockfile 仅含 win32 binary，Linux 下跳过安装 | docker-compose command 加 `npm install --no-package-lock` |
 | Vite proxy 500 错误 | http-proxy 无法解析 Docker 服务名 `backend` | vite.config.ts 改用 `http://host.docker.internal:8000` |
 | 登录 500 | alembic 未运行，users 表不存在 | 先执行 `alembic upgrade head` |
@@ -292,7 +386,7 @@
 
 ---
 
-## 七、关键文件速查
+## 八、关键文件速查
 
 ### 后端
 | 文件 | 作用 |
@@ -322,8 +416,14 @@
 | `backend/app/models/conversation.py` | Conversation + Message 模型 |
 | `backend/app/models/resource.py` | Resource 模型（文件元信息） |
 | `backend/app/models/task.py` | TaskRecord 模型（异步任务记录） |
-| `backend/alembic/versions/` | 迁移文件：001~004（users/model_configs/conversations+messages/resources+task_records） |
+| `backend/alembic/versions/` | 迁移文件：001~006（users/model_configs/conversations+messages/resources+task_records/skills） |
 | `backend/scripts/create_admin.py` | 创建管理员脚本 |
+| `backend/scripts/import_model_configs.py` | 模型配置导入脚本（从 SQL 备份导入） |
+| `backend/scripts/test_model_configs.py` | 模型配置测试脚本（8 个验证用例） |
+| `backend/scripts/test_model_api.py` | API 集成测试脚本 |
+| `backend/app/core/logging.py` | 结构化日志系统（彩色输出，支持多级别） |
+| `backend/app/core/middleware.py` | 请求/响应日志中间件（自动记录 API 调用） |
+| `LOGGING_GUIDE.md` | 实时日志系统完整使用指南 |
 
 ### 前端
 | 文件 | 作用 |
@@ -351,7 +451,7 @@
 
 ---
 
-## 八、快速启动
+## 九、快速启动
 
 ```bash
 cd /Users/sotionting/Desktop/soiton2026   # macOS 路径
@@ -366,7 +466,7 @@ docker-compose ps           # 确认 7 个容器都是 running
 
 ---
 
-## 九、常用运维命令
+## 十、常用运维命令
 
 ```bash
 # 查看容器状态
@@ -395,7 +495,7 @@ docker-compose up -d frontend
 
 ---
 
-## 十、添加新功能的步骤
+## 十一、添加新功能的步骤
 
 ### 后端新增 API
 1. 在 `backend/app/api/` 下新建文件（管理员功能放 `admin/` 子目录）
@@ -411,7 +511,7 @@ docker-compose up -d frontend
 
 ---
 
-## 十一、API 设计规范
+## 十二、API 设计规范
 
 所有接口前缀：`/api/v1`
 
@@ -427,7 +527,7 @@ docker-compose up -d frontend
 
 ---
 
-## 十二、页面路由总览
+## 十三、页面路由总览
 
 | 路径 | 页面 | 权限 |
 |---|---|---|

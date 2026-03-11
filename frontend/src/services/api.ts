@@ -3,8 +3,12 @@ import type { ApiResponse } from '@/types';
 import { storage } from '@/utils/storage';
 import { TOKEN_KEY } from '@/utils/constants';
 
+// 开发环境下，前端页面从 localhost:5173 直接请求 localhost:8000 的 API
+// 生产环境通过 Nginx 代理（前端和后端都通过 Nginx）
+const baseURL = '/api/v1';
+
 const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL,
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 });

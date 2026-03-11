@@ -7,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.config import settings
 from app.core.exceptions import CustomException
+from app.core.logging import logger, log_success, log_error, Colors
+from app.core.middleware import RequestResponseLoggingMiddleware
 
 # 创建FastAPI应用实例
 app = FastAPI(
@@ -16,6 +18,9 @@ app = FastAPI(
     redoc_url=f"{settings.API_V1_PREFIX}/redoc",
     openapi_url=f"{settings.API_V1_PREFIX}/openapi.json",
 )
+
+# 添加日志中间件（最后添加，所以首先执行）
+app.add_middleware(RequestResponseLoggingMiddleware)
 
 # 配置CORS
 app.add_middleware(
@@ -94,15 +99,25 @@ app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 @app.on_event("startup")
 async def startup_event():
     """应用启动时执行"""
-    print(f"🚀 {settings.PROJECT_NAME} v{settings.VERSION} is starting...")
-    print(f"📝 API documentation: http://{settings.HOST}:{settings.PORT}{settings.API_V1_PREFIX}/docs")
+    logger.info("")
+    logger.info(f"{Colors.BOLD}{Colors.GREEN}{'='*60}{Colors.END}")
+    logger.info(f"{Colors.BOLD}{Colors.GREEN}🚀 {settings.PROJECT_NAME} v{settings.VERSION} Starting{Colors.END}")
+    logger.info(f"{Colors.BOLD}{Colors.GREEN}{'='*60}{Colors.END}")
+    logger.info(f"📝 API Docs: http://{settings.HOST}:{settings.PORT}{settings.API_V1_PREFIX}/docs")
+    logger.info(f"🔧 Debug Mode: {settings.DEBUG}")
+    logger.info(f"🗄️  Database: {settings.DATABASE_URL.split('@')[-1] if '@' in settings.DATABASE_URL else 'configured'}")
+    logger.info(f"🔴 Redis: {settings.REDIS_URL.split('@')[-1] if '@' in settings.REDIS_URL else 'configured'}")
+    log_success(f"{settings.PROJECT_NAME} is ready to serve requests!")
+    logger.info("")
 
 
 # 关闭事件
 @app.on_event("shutdown")
 async def shutdown_event():
     """应用关闭时执行"""
-    print(f"👋 {settings.PROJECT_NAME} is shutting down...")
+    logger.info("")
+    logger.info(f"{Colors.BOLD}{Colors.YELLOW}👋 {settings.PROJECT_NAME} is shutting down...{Colors.END}")
+    logger.info("")
 
 
 if __name__ == "__main__":

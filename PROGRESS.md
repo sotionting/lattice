@@ -6,9 +6,10 @@
 
 ## 当前状态速查（每次操作后同步修改此处）
 
-- **阶段：** ✅ 图像生成渲染修复完成（v2.8-fix · 2026-03-03）
-- **下一步：** 验证图像生成全流程 → 视频生成 / Agent 框架
-- **已知阻塞：** 无
+- **阶段：** ⏳ LangChain 依赖修复中（v3.1 · 2026-03-11）
+- **当前任务：** Docker 镜像重建（更新 requirements.txt 三个依赖版本）
+- **下一步：** Docker 重建完成后重启 backend 容器 → 测试 Agent API → 多标签对话页面
+- **已知阻塞：** Docker 镜像重建进行中
 
 ---
 
@@ -616,3 +617,106 @@ docker-compose exec backend python scripts/create_admin.py
 - `frontend/src/pages/Chat.tsx`：加载历史时，检测到 `[IMAGE_DATA]` 标记则解析为 `generatedImages` 字段，AntImage 渲染
 
 **效果：** 打开历史对话图像生成消息时，图片和当次生成时完全一样正常显示，支持点击放大
+
+---
+
+### v3.1 — 2026-03-11 · Spring Boot 风格实时日志 + 模型配置导入 + LangChain 依赖修复
+
+**完成：**
+
+**1. 实时日志系统（Spring Boot 风格）**
+- 新建 `backend/app/core/logging.py`：
+  - `ColoredFormatter` 类：实现 ANSI 彩色日志格式化
+  - 级别颜色：DEBUG 青色、INFO 绿色、WARNING 黄色、ERROR 红色、CRITICAL 红加粗
+  - `setup_logging()` 函数：初始化根 logger，配置控制台处理器和第三方库日志级别
+  - 便捷函数：log_info / log_debug / log_warning / log_error / log_success / log_database_operation / log_api_call
+  - 格式：`2026-03-10 18:53:44.683 ✓ INFO [root] → [7a223157] GET /api/v1/models/active | IP: 142.250.204.42`
+
+- 新建 `backend/app/core/middleware.py`：RequestResponseLoggingMiddleware
+  - 自动生成 8 字符请求 ID，追踪完整请求生命周期
+  - 记录请求：method / path / query_params / client_ip / 请求体（敏感字段脱敏）
+  - 记录响应：状态码 / 执行时间（ms）/ 状态符号（✓/→/⚠/✗）
+  - 支持 StreamingResponse 不阻塞
+  - 异常时捕获并记录 error 日志
+
+- 修改 `backend/app/main.py`：
+  - 导入日志系统和中间件
+  - 添加 RequestResponseLoggingMiddleware 到 ASGI 栈
+  - 启动事件：输出项目信息（名称、版本、API Docs URL、Debug 模式、DB 连接、Redis 状态）
+  - 关闭事件：输出关闭提示
+
+- 创建 `LOGGING_GUIDE.md`（260 行完整指南）：
+  - 日志示例 / 颜色和符号 / 日志级别 / 查看实时日志 / 代码中使用日志 / 敏感信息保护 / 性能监控 / 调试技巧 / 常见错误日志 / 最佳实践 / 配置调整
+
+**2. 模型配置导入脚本**
+- 新建 `backend/scripts/import_model_configs.py`：
+  - 从 SQL 备份文件（`database_backups/postgres_backup_20260311_022621.sql`）提取模型配置
+  - 实现 `parse_datetime()` 函数：支持多种日期格式（ISO、带毫秒、strptime 回退）
+  - 自动检测重复（按 model_id + provider 唯一性）
+  - 成功导入 4 个模型：
+    1. mimo-v2-flash（mimo provider）
+    2. gemini-3-flash-preview（google provider）
+    3. nano-banana-pro（custom provider）
+    4. veo-3.1-generate-preview（custom provider）
+
+- 新建 `backend/scripts/test_model_configs.py`：8 个验证测试
+  - Test 1: DB 连接检查
+  - Test 2: 模型类型分类
+  - Test 3: 默认模型查询
+  - Test 4: 所有模型列表
+  - Test 5: 按提供商分组
+  - Test 6: 关键字段验证
+  - Test 7: 可用性检查
+  - Test 8: 提供商兼容性
+  - **结果：全部通过 ✅**
+
+- 新建 `backend/scripts/test_model_api.py`：API 集成测试
+  - 测试 unauthenticated 和 authenticated 请求
+  - 验证模型列表返回、字段脱敏（API Key 仅显示最后 4 位）
+
+**3. LangChain 依赖版本修复**
+- 修改 `backend/requirements.txt`：
+  - pydantic: 2.6.0 → >=2.7.4（LangChain 0.3.0 requirement）
+  - langchain-core: >=0.2.0 → >=0.3.0（LangChain 0.3.0 compatibility）
+  - openai: 1.12.0 → >=1.40.0（langchain-openai compatibility）
+  - 这三个修改一起解决了 Agent API 返回的 500 错误（"No module named 'langchain_google_genai'"）
+
+- **根本原因分析**：
+  - LangChain 0.3.0 引入了 Tool Calling 功能，要求 Pydantic >=2.7.4 支持新的验证特性
+  - langchain-openai 需要 openai >=1.40.0 支持最新 API 格式
+  - 之前版本冲突导致某些子依赖无法正确安装，进而缺失 langchain_google_genai 模块
+
+**4. 测试验证**
+- ✅ 日志系统：运行 test_logging.py 显示彩色格式化日志
+- ✅ 模型导入：4 个模型成功导入数据库（无重复）
+- ✅ 模型测试：8 个验证用例全部通过
+- ✅ 依赖版本：Docker 镜像重建中（预期完成后 Agent API 500 错误消除）
+
+**下一步：**
+```bash
+# 1. 等待 Docker 重建完成（task bfxnc4cdq）
+# 2. 重启 backend 容器
+docker-compose restart backend
+
+# 3. 测试 Agent API
+python test_agent_api.py
+
+# 4. 验证通过后开始多标签对话页面实现
+```
+
+**问题：**
+- Docker 重建进行中，预期 30-60 分钟完成
+- Agent API 500 错误待验证修复
+
+**新增文件：**
+- backend/app/core/logging.py（日志系统）
+- backend/app/core/middleware.py（请求/响应中间件）
+- backend/scripts/import_model_configs.py（导入脚本）
+- backend/scripts/test_model_configs.py（验证测试）
+- backend/scripts/test_model_api.py（API 测试）
+- LOGGING_GUIDE.md（日志使用指南）
+- test_logging.py（前端日志测试脚本）
+
+**修改文件：**
+- backend/app/main.py（集成日志系统 + 中间件）
+- backend/requirements.txt（依赖版本修复）

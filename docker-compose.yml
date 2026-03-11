@@ -88,6 +88,8 @@ services:
       - VITE_API_BASE_URL=http://localhost:8000
     depends_on:
       - backend
+    extra_hosts:
+      - host.docker.internal:host-gateway  # Linux 环境下映射 host.docker.internal 到宿主机网关
     networks:
       - agent_network
 

@@ -12,6 +12,7 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    host: '0.0.0.0',  // 监听所有网络接口
     // Docker on Windows：宿主机文件系统变更不会触发 Linux 容器内的 inotify 事件
     // 必须开启轮询模式，让 Vite 主动定时检查文件是否变化（代价是 CPU 稍高，开发环境可接受）
     watch: {
@@ -20,10 +21,9 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        // Docker Desktop（Windows/Mac）提供 host.docker.internal 让容器内能访问宿主机
-        // 后端已在宿主机上映射 8000 端口（docker-compose ports: 8000:8000），走这条路可靠
-        // 注意：不能用 backend:8000，Vite 的 http-proxy 无法正确解析 Docker 内部服务名
-        target: 'http://host.docker.internal:8000',
+        // 通过 Docker 网络内的 Nginx 容器处理 API 请求
+        // 同一个 agent_network 内，frontend 和 nginx 可以用服务名直接通信
+        target: 'http://nginx',
         changeOrigin: true,
       },
     },
